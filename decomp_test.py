@@ -3,10 +3,11 @@ from pyechonest import config
 from scikits import audiolab
 from csc import divisi2
 import numpy as np
+from pylab import *
 
 config.ECHO_NEST_API_KEY="LFYSHIOM0NNSDBCKJ"
 
-TEST_FILENAME = "settler.ogg"
+TEST_FILENAME = "clocks.ogg"
 
 def normalize_dense_cols(array):
     array = array.copy()
@@ -53,7 +54,7 @@ def test():
 
     divisi_song = divisi2.DenseMatrix(songdata)
     divisi2.save(divisi_song, TEST_FILENAME+'.pickle')
-    return normalize_dense_cols(divisi_song)
+    return (snddata, bars, rate, normalize_dense_cols(divisi_song))
 
-songdata = test()
+snddata, bars, rate, svd = test()
 
