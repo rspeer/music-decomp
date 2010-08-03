@@ -14,6 +14,29 @@ def normalize_dense_cols(array):
         array[:,col] /= np.linalg.norm(array[:,col]) + 0.00001
     return array
 
+def flatten(x):
+    """flatten(sequence) -> list
+
+    from: http://kogs-www.informatik.uni-hamburg.de/~meine/python_tricks
+
+    Returns a single, flat list which contains all elements retrieved
+    from the sequence and all recursively contained sub-sequences
+    (iterables).
+
+    Examples:
+    >>> [1, 2, [3,4], (5,6)]
+    [1, 2, [3, 4], (5, 6)]
+    >>> flatten([[[1,2,3], (42,None)], [4,5], [6], 7, MyVector(8,9,10)])
+    [1, 2, 3, 42, None, 4, 5, 6, 7, 8, 9, 10]"""
+
+    result = []
+    for el in x:
+        if hasattr(el, "__iter__") and not isinstance(el, basestring):
+            result.extend(flatten(el))
+        else:
+            result.append(el)
+    return result
+
 def analyze_song(filename):
     sndfile = audiolab.Sndfile(filename)
     snddata = sndfile.read_frames(sndfile.nframes)
@@ -22,6 +45,8 @@ def analyze_song(filename):
     track = track_from_filename(filename)
     bars = [bar['start'] for bar in track.bars]
     beats = [beat['start'] for beat in track.beats]
+    midbeats = [(beats[i] + beats[i+1])/2 for i in xrange(len(beats)-1)]
+    beats = flatten(zip(beats, midbeats))
     meter = float(len(beats))/len(bars)
     print meter
     meter = int(np.round(meter))
