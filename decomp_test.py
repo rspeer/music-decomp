@@ -1,13 +1,12 @@
-from pyechonest.track import Track
+from pyechonest.track import track_from_filename
 from pyechonest import config
 from scikits import audiolab
 from csc import divisi2
+from csc.divisi2.export_svdview import write_packed
 import numpy as np
-from pylab import *
+import os
 
 config.ECHO_NEST_API_KEY="LFYSHIOM0NNSDBCKJ"
-
-TEST_FILENAME = "settler.ogg"
 
 def normalize_dense_cols(array):
     array = array.copy()
@@ -15,12 +14,12 @@ def normalize_dense_cols(array):
         array[:,col] /= np.linalg.norm(array[:,col]) + 0.00001
     return array
 
-def test():
-    sndfile = audiolab.Sndfile(TEST_FILENAME)
+def analyze_song(filename):
+    sndfile = audiolab.Sndfile(filename)
     snddata = sndfile.read_frames(sndfile.nframes)
     rate = sndfile.samplerate
 
-    track = Track(TEST_FILENAME)
+    track = track_from_filename(filename)
     bars = [bar['start'] for bar in track.bars]
     beats = [beat['start'] for beat in track.beats]
     meter = float(len(beats))/len(bars)
@@ -33,7 +32,7 @@ def test():
     for beatnum in xrange(len(beats)-1):
         start = beats[beatnum]
         end = beats[beatnum+1]
-        next_bar = beats[min(beatnum+meter, len(beats)-1)]
+        next_bar = beats[min(beatnum+meter*2, len(beats)-1)]
         segs = [seg for seg in track.segments if seg['start'] >= start and seg['start'] < end]
         bar_segs = [seg for seg in track.segments if seg['start'] >= start and seg['start'] < next_bar]
         bpm = 60.0/(end-start)
@@ -61,14 +60,26 @@ def test():
             songdata[beatnum,25] = segrate
             songdata[beatnum,26] = bpm
 
-    divisi_song = divisi2.DenseMatrix(songdata)
-    divisi2.save(divisi_song, TEST_FILENAME+'.pickle')
-    return (snddata, beats, rate, normalize_dense_cols(divisi_song))
+    diff = songdata[1:] - songdata[:-1]
+    msq_diff = np.sqrt((diff ** 2).mean(axis=0))
+    filebase = filename[:filename.rfind('.')]
+    labels = [filebase+':'+str(i) for i in xrange(len(songdata))]
+    songmatrix = divisi2.DenseMatrix(songdata, row_labels=labels)
+    return songmatrix, msq_diff
 
-snddata, beats, rate, mat = test()
-U, S, V = mat.svd(k=10)
-songlen = len(beats)
-colors = [(1.0, x/float(songlen), 0.0) for x in xrange(songlen)]
-plot(U[:,0], U[:,1], 'k-')
-scatter(U[:,0], U[:,1], facecolors=colors, edgecolors=colors)
+def multi_song_analyze():
+    song1, msq1 = analyze_song('clocks.ogg')
+    song2, msq2 = analyze_song('settler.ogg')
+    song3, msq3 = analyze_song('high-hopes.ogg')
+    songmatrix = song1.concatenate(song2).concatenate(song3)
+    rms_diff = np.sqrt((msq1 + msq2 + msq3) / 3)
+    songmatrix_centered, means = (songmatrix/rms_diff).col_mean_center()
+    U, S, V = songmatrix_centered.svd(k=10)
+    write_packed(U, os.path.expanduser('~/Documents/Processing/musicsvd/data/combined'))
+    return songmatrix_centered, U, S, V
 
+def test():
+    return multi_song_analyze()
+
+if __name__ == '__main__':
+    songmatrix, U, S, V = test()
