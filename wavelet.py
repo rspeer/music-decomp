@@ -37,11 +37,14 @@ def music_wavelets(signal):
 
 if __name__ == '__main__':
     import pylab
-    sndfile = audiolab.Sndfile('settler.ogg')
+    sndfile = audiolab.Sndfile('clocks.ogg')
     signal = np.mean(sndfile.read_frames(44100*20), axis=1)
     output = music_wavelets(signal)
     pylab.figure(1)
     pylab.imshow(output[:, ::10], aspect='auto', origin='lower')
-    mfcc = np.abs(fft(np.log(output[16:112].T)))
+    mfcc = dct(np.log(output[16:112, :].T + 0.1))
+    pylab.hot()
+    pylab.savefig('clocks1.png')
     pylab.figure(2)
-    pylab.imshow(mfcc[::10, 1:65].T, aspect='auto', origin='lower')
+    pylab.imshow(mfcc[:, 1:65].T, aspect='auto', origin='lower')
+    pylab.savefig('clocks2.png')
