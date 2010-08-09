@@ -28,16 +28,11 @@ def morlet_freq_harmonic(f0, M):
 def downsample(signal, factor):
     return resample(signal, signal.shape[-1]/factor)
 
-def modified_hanning(n):
-    h = hanning(n)
-    modifier = h[:n/2] + h[n/2:]
-    return h / np.concatenate([modifier, modifier])
-
 fftfilters = np.zeros((nfilters, M), dtype='complex128')
 for x in xrange(nfilters):
     filter1 = morlet_freq(C0 * 2.0**(x/12.0), M)
     fftfilters[x] = fft(filter1)
-hanning_window = modified_hanning(M)
+hanning_window = hanning(M)
 print "made filters"
 
 # global so we don't have to reallocate it over and over
@@ -50,14 +45,6 @@ def wavelet_detect(signal):
     
     The inevitable tradeoff comes in the form of time resolution in the bass
     notes.
-
-    For some reason, the time steps come out in a wacky order:
-    
-    - backwards from M/2 to 0
-    - backwards from M to M/2
-    
-    Fixing this takes time. The downstream code can deal with it more
-    efficiently, so we actually return the array in this messed up order.
     """
     global fftsignal
     fftsignal[:] = fft(signal * hanning_window).conj()
