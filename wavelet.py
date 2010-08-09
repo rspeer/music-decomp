@@ -85,7 +85,7 @@ if __name__ == '__main__':
     sndfile = audiolab.Sndfile('settler.ogg')
     signal = np.mean(sndfile.read_frames(44100*20), axis=1)
     #signal = chirp(np.arange(2**18), 16.3516/44100, 2**18, 4185.01/44100,
-                   method='logarithmic')
+    #               method='logarithmic')
     pylab.figure(2)
     pylab.specgram(signal, NFFT=16384, noverlap=16384-4096, Fs=44100)
     pylab.ylim(0, 1000)
