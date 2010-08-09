@@ -15,8 +15,14 @@ def morlet_freq(f0, M):
     # return wavelets.morlet(RATE*40/f0, 40, 0.5)
 
     w = wavelets.morlet(M, 40, float(f0*M)/(RATE*80))
-    #for harmonic in xrange(2, 9):
-    #    w -= wavelets.morlet(M, 40, float(f0*M)/(harmonic*RATE*80))/harmonic
+    return w / np.linalg.norm(w)
+
+def morlet_freq_harmonic(f0, M):
+    # this doesn't actually work
+
+    w = wavelets.morlet(M, 40, float(f0*M)/(RATE*80))
+    for harmonic in xrange(2, 9):
+        w -= wavelets.morlet(M, 40, float(f0*M)/(harmonic*RATE*80))/harmonic
     return w / np.linalg.norm(w)
 
 def downsample(signal, factor):
@@ -27,11 +33,10 @@ def modified_hanning(n):
     modifier = h[:n/2] + h[n/2:]
     return h / np.concatenate([modifier, modifier])
 
-filters = np.zeros((nfilters, M), dtype='complex128')
 fftfilters = np.zeros((nfilters, M), dtype='complex128')
 for x in xrange(nfilters):
-    filters[x] = morlet_freq(C0 * 2.0**(x/12.0), M)
-    fftfilters[x] = fft(filters[x])
+    filter1 = morlet_freq(C0 * 2.0**(x/12.0), M)
+    fftfilters[x] = fft(filter1)
 triangle = modified_hanning(M)
 print "made filters"
 
@@ -82,10 +87,10 @@ def windowed_wavelets(signal):
 
 if __name__ == '__main__':
     import pylab, time
-    sndfile = audiolab.Sndfile('settler.ogg')
-    signal = np.mean(sndfile.read_frames(44100*20), axis=1)
-    #signal = chirp(np.arange(2**18), 16.3516/44100, 2**18, 4185.01/44100,
-    #               method='logarithmic')
+    #sndfile = audiolab.Sndfile('settler.ogg')
+    #signal = np.mean(sndfile.read_frames(44100*20), axis=1)
+    signal = chirp(np.arange(2**18), 16.3516/44100, 2**18, 4185.01/44100,
+                   method='logarithmic')
     pylab.figure(2)
     pylab.specgram(signal, NFFT=16384, noverlap=16384-4096, Fs=44100)
     pylab.ylim(0, 1000)
