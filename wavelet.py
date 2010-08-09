@@ -15,6 +15,8 @@ def morlet_freq(f0, M):
     # return wavelets.morlet(RATE*40/f0, 40, 0.5)
 
     w = wavelets.morlet(M, 40, float(f0*M)/(RATE*80))
+    #for harmonic in xrange(2, 9):
+    #    w -= wavelets.morlet(M, 40, float(f0*M)/(harmonic*RATE*80))/harmonic
     return w / np.linalg.norm(w)
 
 def downsample(signal, factor):
@@ -54,9 +56,8 @@ def wavelet_detect(signal):
     """
     global fftsignal
     fftsignal[:] = fft(signal * triangle).conj()
-    #fftsignal[:] = fft(signal)
     convolved = ifft(fftfilters * fftsignal)
-    return np.abs(convolved)*triangle
+    return np.abs(convolved)
 
 def stream_wavelets(signal):
     sig = np.concatenate([np.zeros((M/2,)),
@@ -65,10 +66,9 @@ def stream_wavelets(signal):
     lastchunk = np.zeros((nfilters, M/2))
     for frame in xrange(sig.shape[-1]*2/M - 1):
         chunk = wavelet_detect(sig[frame*M/2 : (frame+2)*M/2])
-        #yield lastchunk.copy() + chunk[:, :M/2]
-        #lastchunk[:] = chunk[:, M/2:]
-        lastchunk[:] = chunk[:, M/2:0:-1]
-        yield lastchunk + chunk[:, :M/2-1:-1]
+        # this is so prematurely optimized that it's evil^(3/4).
+        yield (lastchunk.copy() + chunk[:, M/2-1::-1] * triangle[:M/2])
+        lastchunk[:] = chunk[:, M-1:M/2-1:-1] * triangle[M/2:]
 
 def windowed_wavelets(signal):
     sig = np.concatenate([np.zeros((M/2,)),
@@ -85,7 +85,7 @@ if __name__ == '__main__':
     sndfile = audiolab.Sndfile('settler.ogg')
     signal = np.mean(sndfile.read_frames(44100*20), axis=1)
     #signal = chirp(np.arange(2**18), 16.3516/44100, 2**18, 4185.01/44100,
-    #               method='logarithmic')
+                   method='logarithmic')
     pylab.figure(2)
     pylab.specgram(signal, NFFT=16384, noverlap=16384-4096, Fs=44100)
     pylab.ylim(0, 1000)
