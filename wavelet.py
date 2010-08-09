@@ -37,7 +37,7 @@ fftfilters = np.zeros((nfilters, M), dtype='complex128')
 for x in xrange(nfilters):
     filter1 = morlet_freq(C0 * 2.0**(x/12.0), M)
     fftfilters[x] = fft(filter1)
-triangle = modified_hanning(M)
+hanning_window = modified_hanning(M)
 print "made filters"
 
 # global so we don't have to reallocate it over and over
@@ -60,9 +60,9 @@ def wavelet_detect(signal):
     efficiently, so we actually return the array in this messed up order.
     """
     global fftsignal
-    fftsignal[:] = fft(signal * triangle).conj()
-    convolved = ifft(fftfilters * fftsignal)
-    return np.abs(convolved)
+    fftsignal[:] = fft(signal * hanning_window).conj()
+    convolved = np.roll(ifft(fftfilters * fftsignal), M/2, axis=-1)[:, ::-1]
+    return np.abs(convolved) * hanning_window
 
 def stream_wavelets(signal):
     sig = np.concatenate([np.zeros((M/2,)),
@@ -71,9 +71,8 @@ def stream_wavelets(signal):
     lastchunk = np.zeros((nfilters, M/2))
     for frame in xrange(sig.shape[-1]*2/M - 1):
         chunk = wavelet_detect(sig[frame*M/2 : (frame+2)*M/2])
-        # this is so prematurely optimized that it's evil^(3/4).
-        yield (lastchunk.copy() + chunk[:, M/2-1::-1] * triangle[:M/2])
-        lastchunk[:] = chunk[:, M-1:M/2-1:-1] * triangle[M/2:]
+        yield (lastchunk.copy() + chunk[:, :M/2])
+        lastchunk[:] = chunk[:, M/2:]
 
 def windowed_wavelets(signal):
     sig = np.concatenate([np.zeros((M/2,)),
