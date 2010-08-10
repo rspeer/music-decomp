@@ -5,7 +5,7 @@ from scikits import audiolab
 from csc import divisi2
 RATE = 44100
 
-C0 = 16.3516
+A0 = 27.5
 M = 65536
 nfilters = 96
 def morlet_freq(f0, M):
@@ -16,7 +16,7 @@ def morlet_freq(f0, M):
     # return wavelets.morlet(RATE*40/f0, 40, 0.5)
 
     w = wavelets.morlet(M, 40, float(f0*M)/(RATE*80))
-    return w / np.linalg.norm(w)
+    return w * (f0/RATE) / np.linalg.norm(w)
 
 def morlet_freq_harmonic(f0, M):
     # this doesn't actually work
@@ -32,7 +32,7 @@ def downsample(signal, factor):
 
 fftfilters = np.zeros((nfilters, M), dtype='complex128')
 for x in xrange(nfilters):
-    filter1 = morlet_freq(C0 * 2.0**(x/12.0), M)
+    filter1 = morlet_freq(A0 * 2.0**(x/12.0), M)
     fftfilters[x] = fft(filter1)
 hanning_window = hanning(M)
 print "made filters"
@@ -60,7 +60,7 @@ def stream_wavelets(signal):
     lastchunk = np.zeros((nfilters, M/2), dtype='complex128')
     for frame in xrange(sig.shape[-1]*2/M - 1):
         chunk = wavelet_detect(sig[frame*M/2 : (frame+2)*M/2])
-        yield (lastchunk.copy() + chunk[:, :M/2])
+        yield (lastchunk + chunk[:, :M/2])
         lastchunk[:] = chunk[:, M/2:]
 
 def windowed_wavelets(signal):
@@ -75,34 +75,60 @@ def windowed_wavelets(signal):
 
 def svd_reduce(matrix):
     d = divisi2.DenseMatrix(matrix)
-    U, V = d.nmf(k=20)
+    U, V = d.nmf(k=40)
     U = np.asarray(U)
     V = np.asarray(V)
     U_prime = np.zeros(U.shape)
     for col in xrange(U.shape[1]):
         row = np.argmax(U[:,col])
         U_prime[row, col] = 1 #U[row,col]
-    return np.dot(U_prime, V.T)
+    return np.dot(U**3, V.T)
 
-def deharmonize_pitches(matrix):
-    matrix = np.concatenate([np.zeros((36, matrix.shape[-1])), matrix])
-    return np.maximum(0,
-      matrix[36:] - matrix[24:-12]/4 - matrix[17,-19]/9 - matrix[12:-24]/3 -
-      matrix[8:-28]/16)
+def timbre_color(matrix):
+    matrix = np.concatenate([np.zeros((43, matrix.shape[-1])), matrix])
+    deharmonized = matrix[43:]
+    for h, steps in enumerate((12, 19, 24, 28, 31, 34, 36, 38, 40, 42, 43)):
+        harmonic = h + 2
+        deharmonized -= matrix[43-steps:-steps]/harmonic
+    bigger = np.concatenate([np.zeros((24, deharmonized.shape[-1])), deharmonized])
+    color = np.zeros(deharmonized.shape + (3,))
+    baseline = np.maximum(0, deharmonized)
+    color[:,:,0] = (deharmonized + np.minimum(deharmonized/2, bigger[12:nfilters+12]))
+    color[:,:,1] = (deharmonized + np.minimum(deharmonized/3, bigger[19:nfilters+19]))
+    color[:,:,2] = (deharmonized + np.minimum(deharmonized/4, bigger[24:nfilters+24]))
+    color -= np.mean(color, axis=-1)[...,np.newaxis]
+    color = (color*100)
+    color = color*2 + 1.5
+    print np.min(color), np.max(color)
+    #for i in xrange(3):
+    #    print np.min(color[...,i]), np.max(color[...,i])
+    #    color[...,i] -= np.min(color[...,i])
+    #    color[...,i] /= np.max(color[...,i])
+    #color /= np.sqrt(np.sum(color * color, axis=-1))[...,np.newaxis]
+    #print np.min(np.sqrt(np.sum(color * color, axis=-1)))
+    rgb = baseline[...,np.newaxis] * color
+    return np.maximum(0, rgb)
+
+def smooth(matrix, n=20):
+    end = matrix.shape[1]-n
+    result = matrix[:, 0:end]
+    for i in xrange(n):
+        result = np.maximum(result, matrix[:, i:end+i])
+    return result
 
 if __name__ == '__main__':
     import pylab, time
-    sndfile = audiolab.Sndfile('clocks.ogg')
-    signal = np.mean(sndfile.read_frames(44100*20), axis=1)
+    sndfile = audiolab.Sndfile('dont.ogg')
+    signal = np.mean(sndfile.read_frames(44100*30), axis=1)
     #signal = chirp(np.arange(2**18), 16.3516/44100, 2**18, 4185.01/44100,
     #               method='logarithmic')
     pieces = []
     for piece in stream_wavelets(signal):
         print time.time()
-        pieces.append(piece)
+        pieces.append(timbre_color(np.abs(piece[:, ::200])))
 
-    wavelet_graph = np.abs(np.concatenate(pieces[1:-2], axis=-1))
-    svdgraph = deharmonize_pitches(wavelet_graph[:, ::100])
+    wavelet_graph = np.concatenate(pieces[1:-2], axis=1)
+    svdgraph = np.minimum(wavelet_graph / np.max(wavelet_graph), 0.25) * 4
     pylab.figure(1)
     pylab.imshow(svdgraph, aspect='auto', origin='lower')
     pylab.show()
