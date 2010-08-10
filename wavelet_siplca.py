@@ -1,8 +1,12 @@
+from pyechonest.track import track_from_filename
+from pyechonest import config
 from scipy.signal import fftconvolve, wavelets, resample, hanning, chirp
 from scipy.fftpack import fft, ifft
 import numpy as np
 from scikits import audiolab
 from csc import divisi2
+
+config.ECHO_NEST_API_KEY="LFYSHIOM0NNSDBCKJ"
 RATE = 44100
 
 A0 = 27.5
@@ -18,18 +22,6 @@ def morlet_freq(f0, M):
     w = wavelets.morlet(M, 40, float(f0*M)/(RATE*80))
     return w * (f0/RATE) / np.linalg.norm(w)
 
-def morlet_freq_harmonic(f0, M):
-    # this doesn't actually work
-
-    w = wavelets.morlet(M, 40, float(f0*M)/(RATE*80))
-    for harmonic in xrange(2, 9):
-        w += wavelets.morlet(M, 40, float(f0*M*harmonic)/(RATE*80))/harmonic
-        w -= wavelets.morlet(M, 40, float(f0*M)/(harmonic*RATE*80))/harmonic
-    return w / np.linalg.norm(w)
-
-def downsample(signal, factor):
-    return resample(signal, signal.shape[-1]/factor)
-
 fftfilters = np.zeros((nfilters, M), dtype='complex128')
 for x in xrange(nfilters):
     filter1 = morlet_freq(A0 * 2.0**(x/12.0), M)
@@ -37,10 +29,7 @@ for x in xrange(nfilters):
 hanning_window = hanning(M)
 print "made filters"
 
-# global so we don't have to reallocate it over and over
-fftsignal = np.zeros((M,), dtype='complex128')
-
-def wavelet_detect(signal):
+def wavelet_detect(signal, decomp=True):
     """
     Uses a set of wavelet filters to detect pitches in the signal, with
     constant pitch resolution (higher than a typical STFT!)
@@ -48,9 +37,13 @@ def wavelet_detect(signal):
     The inevitable tradeoff comes in the form of time resolution in the bass
     notes.
     """
-    global fftsignal
-    fftsignal[:] = fft(signal * hanning_window).conj()
-    convolved = np.roll(ifft(fftfilters * fftsignal), M/2, axis=-1)[:, ::-1]
+    fftsignal = fft(signal * hanning_window, axis=-1)
+    if decomp:
+        fftsignal[:] = fftsignal.conj()
+        convolved = np.roll(ifft(fftfilters * fftsignal), M/2, axis=-1)[:, ::-1]
+    else:
+        convolved = ifft(fftfilters * fftsignal)
+        
     return convolved * hanning_window
 
 def stream_wavelets(signal):
@@ -59,30 +52,16 @@ def stream_wavelets(signal):
                           np.zeros((M,))])
     lastchunk = np.zeros((nfilters, M/2), dtype='complex128')
     for frame in xrange(sig.shape[-1]*2/M - 1):
-        chunk = wavelet_detect(sig[frame*M/2 : (frame+2)*M/2])
+        chunk = wavelet_detect(sig[frame*M/2 : (frame+2)*M/2], decomp=True)
         yield (lastchunk + chunk[:, :M/2])
         lastchunk[:] = chunk[:, M/2:]
 
-def windowed_wavelets(signal):
-    sig = np.concatenate([np.zeros((M/2,)),
-                          signal,
-                          np.zeros((M,))])
-    output = np.zeros((nfilters, sig.shape[-1]))
-    for frame in xrange(sig.shape[-1]*2/M - 1):
-        chunk = wavelet_detect(sig[frame*M/2 : (frame+2)*M/2])
-        output[:, frame*M/2 : (frame+2)*M/2] += chunk
-    return output[:, M/2:-M]
-
-def svd_reduce(matrix):
-    d = divisi2.DenseMatrix(matrix)
-    U, V = d.nmf(k=40)
-    U = np.asarray(U)
-    V = np.asarray(V)
-    U_prime = np.zeros(U.shape)
-    for col in xrange(U.shape[1]):
-        row = np.argmax(U[:,col])
-        U_prime[row, col] = 1 #U[row,col]
-    return np.dot(U**3, V.T)
+def stream_recomp(sig):
+    lastchunk = np.zeros((nfilters, M/4), dtype='complex128')
+    for frame in xrange(sig.shape[-1]*4/M - 3):
+        chunk = wavelet_detect(sig[:, frame*M/4 : (frame+4)*M/4], decomp=False)
+        yield (lastchunk + chunk[:, :M/4])
+        lastchunk[:] = chunk[:, M/4:M/2]
 
 ALPHA = 0.5
 meansq = 0.00001
@@ -116,21 +95,29 @@ def smooth(matrix, n=20):
         result = np.maximum(result, matrix[:, i:end+i])
     return result
 
-if __name__ == '__main__':
-    import pylab, time
-    sndfile = audiolab.Sndfile('settler.ogg')
-    signal = np.mean(sndfile.read_frames(44100*60), axis=1)
-    #signal = chirp(np.arange(2**18), 16.3516/44100, 2**18, 4185.01/44100,
-    #               method='logarithmic')
+def analyze_music(filename):
+    sndfile = audiolab.Sndfile(filename)
+    track = track_from_filename(filename)
+    signal = np.mean(sndfile.read_frames(44100*30), axis=1)
     pieces = []
     for piece in stream_wavelets(signal):
         print time.time()
-        pieces.append(timbre_color(np.abs(piece[:, ::200])))
+        pieces.append(piece)
+    wavelet_decomp = np.abs(np.concatenate(pieces, axis=-1))
 
-    wavelet_graph = np.concatenate(pieces[1:-2], axis=1)
-    svdgraph = wavelet_graph
-    pylab.figure(1)
-    pylab.imshow(svdgraph, aspect='auto', origin='lower')
+    grid = np.zeros((nfilters, len(track.tatums)))
+    for t in xrange(len(track.tatums)):
+        tatum = track.tatums[t]
+        start = tatum['start']*RATE
+        end = (tatum['start']+tatum['duration'])*RATE
+        if start > wavelet_decomp.shape[1]: break
+        grid[:, t] = np.max(wavelet_decomp[:, start:end], axis=1)
+    return grid[:, :t]
+
+if __name__ == '__main__':
+    import pylab, time
+    grid = analyze_music('clocks.ogg')
+    pylab.imshow(grid, aspect='auto')
     pylab.show()
 
 #mfcc = np.abs(fft(np.log(output[16:112].T)))

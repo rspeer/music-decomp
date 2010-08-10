@@ -1,4 +1,4 @@
-from pyechonest.track import Track
+from pyechonest.track import track_from_filename
 from pyechonest import config
 from scikits import audiolab
 from csc import divisi2
@@ -13,7 +13,7 @@ def test():
     snddata = sndfile.read_frames(sndfile.nframes)
     rate = sndfile.samplerate
 
-    track = Track(TEST_FILENAME)
+    track = track_from_filename(TEST_FILENAME)
     bars = [bar['start'] for bar in track.bars]
 
     for barnum in xrange(len(bars)-1):

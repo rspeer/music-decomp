@@ -18,8 +18,6 @@ def morlet_freq(f0, M):
     w = wavelets.morlet(M, 40, float(f0*M)/(RATE*80))
     return w * (f0/RATE) / np.linalg.norm(w)
 
-
-
 fftfilters = np.zeros((nfilters, M), dtype='complex128')
 for x in xrange(nfilters):
     filter1 = morlet_freq(A0 * 2.0**(x/12.0), M)
@@ -35,12 +33,11 @@ def wavelet_detect(signal, decomp=True):
     The inevitable tradeoff comes in the form of time resolution in the bass
     notes.
     """
-    fftsignal = fft(signal * hanning_window, axis=-1)
+    fftsignal = fft(signal * hanning_window, axis=-1).conj()
     if decomp:
-        fftsignal[:] = fftsignal.conj()
         convolved = np.roll(ifft(fftfilters * fftsignal), M/2, axis=-1)[:, ::-1]
     else:
-        convolved = ifft(fftfilters * fftsignal)
+        convolved = ifft(fftfilters * fftsignal)[:, ::-1]
         
     return convolved * hanning_window
 
@@ -105,7 +102,7 @@ if __name__ == '__main__':
         pieces.append(piece)
     wavelet_decomp = np.concatenate(pieces, axis=-1)
     audio_pieces = []
-    for piece in stream_recomp(np.real(wavelet_decomp)):
+    for piece in stream_recomp(wavelet_decomp.conj()):
         print '*', time.time()
         signal = np.real(np.mean(piece, axis=0))
         audio_pieces.append(signal)
