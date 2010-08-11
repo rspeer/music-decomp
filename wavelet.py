@@ -118,7 +118,7 @@ def smooth(matrix, n=20):
 
 if __name__ == '__main__':
     import pylab, time
-    sndfile = audiolab.Sndfile('settler.ogg')
+    sndfile = audiolab.Sndfile('clocks.ogg')
     signal = np.mean(sndfile.read_frames(44100*60), axis=1)
     #signal = chirp(np.arange(2**18), 16.3516/44100, 2**18, 4185.01/44100,
     #               method='logarithmic')

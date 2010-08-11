@@ -117,7 +117,7 @@ def analyze_music(filename):
 if __name__ == '__main__':
     import pylab, time
     grid = analyze_music('clocks.ogg')
-    pylab.imshow(grid, aspect='auto')
+    pylab.imshow(grid, aspect='auto', origin='lower')
     pylab.show()
 
 #mfcc = np.abs(fft(np.log(output[16:112].T)))
