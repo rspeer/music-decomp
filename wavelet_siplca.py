@@ -5,6 +5,7 @@ from scipy.fftpack import fft, ifft
 import numpy as np
 from scikits import audiolab
 from csc import divisi2
+from plca.harmonic_plca import SHIPLCA
 
 config.ECHO_NEST_API_KEY="LFYSHIOM0NNSDBCKJ"
 RATE = 44100
@@ -98,26 +99,30 @@ def smooth(matrix, n=20):
 def analyze_music(filename):
     sndfile = audiolab.Sndfile(filename)
     track = track_from_filename(filename)
-    signal = np.mean(sndfile.read_frames(44100*30), axis=1)
+    signal = np.mean(sndfile.read_frames(44100*120), axis=1)
     pieces = []
     for piece in stream_wavelets(signal):
         print time.time()
-        pieces.append(piece)
+        pieces.append(piece[:, ::100])
     wavelet_decomp = np.abs(np.concatenate(pieces, axis=-1))
 
     grid = np.zeros((nfilters, len(track.tatums)))
     for t in xrange(len(track.tatums)):
         tatum = track.tatums[t]
-        start = tatum['start']*RATE
-        end = (tatum['start']+tatum['duration'])*RATE
+        start = tatum['start']*(RATE/100)
+        end = (tatum['start']+tatum['duration'])*(RATE/100)
         if start > wavelet_decomp.shape[1]: break
         grid[:, t] = np.max(wavelet_decomp[:, start:end], axis=1)
     return grid[:, :t]
 
 if __name__ == '__main__':
     import pylab, time
-    grid = analyze_music('clocks.ogg')
-    pylab.imshow(grid, aspect='auto', origin='lower')
+    grid = analyze_music('koyaanisqatsi.ogg')
+
+    W, Z, H, norm, recon, logprob = SHIPLCA.analyze(grid, 3, win=(95, 1),
+                                                    niter=100)
+    rgb = np.rollaxis(H, 0, 3)
+    pylab.imshow(rgb/np.max(rgb)*3, aspect='auto', origin='lower')
     pylab.show()
 
 #mfcc = np.abs(fft(np.log(output[16:112].T)))

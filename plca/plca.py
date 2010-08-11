@@ -271,7 +271,7 @@ class PLCA(object):
         W = iW if initW is None else initW.copy()
         Z = iZ if initZ is None else initZ.copy()
         H = iH if initH is None else initH.copy()
-    
+        
         params.W = W
         params.Z = Z
         params.H = H
@@ -701,6 +701,10 @@ class SIPLCA2(SIPLCA):
         W = self._apply_entropic_prior_and_normalize(
             initialW, Wevidence, self.betaW, nu=self.nu, axis=[0, 2])
 
+        # Rob: fixed baseline
+        W[0] = 0.1
+        W[1:] /= np.sum(W[1:]/0.1, axis=0)[np.newaxis,:,:]
+        
         Hevidence = self._fix_negative_values(self.VRH.transpose((1,2,0))
                                               + self.alphaH - 1)
         initialH = normalize(Hevidence, axis=[1, 2])
