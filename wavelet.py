@@ -30,7 +30,7 @@ HARMONIC_VALUES = [(1, 0),
                    (30, 59),
                    (32, 60)]
 
-NOISE_SHAPE = hanning(25) / np.sum(hanning(25)) * 3.0
+NOISE_SHAPE = hanning(25) / np.sum(hanning(25)) * 3.1
 
 def morlet_freq(f0, M):
     """
@@ -40,7 +40,7 @@ def morlet_freq(f0, M):
     # return wavelets.morlet(RATE*40/f0, 40, 0.5)
 
     w = wavelets.morlet(M, 40, float(f0*M)/(RATE*80))
-    return w * (f0/RATE) / np.linalg.norm(w)
+    return w * (np.sqrt(f0)/RATE) / np.linalg.norm(w)
 
 def morlet_freq_harmonic(f0, M):
     # this doesn't actually work
@@ -149,7 +149,7 @@ def timbre_color(matrix):
     rgb[:,:,1] = detect_harmonics(matrix, 'sawtooth')
     rgb[:,:,2] = detect_harmonics(matrix, 'triangle')
     
-    amp_adjust = np.sum(np.sum(rgb, axis=2), axis=0) / amplitude
+    amp_adjust = np.sum(np.sum(rgb, axis=2), axis=0) / (amplitude+EPS)
     rgb /= amp_adjust[np.newaxis, :, np.newaxis]
 
     prev_meansq = meansq
@@ -166,8 +166,8 @@ def smooth(matrix, n=20):
 
 if __name__ == '__main__':
     import pylab, time
-    sndfile = audiolab.Sndfile('wakinglife.ogg')
-    signal = np.mean(sndfile.read_frames(44100*60), axis=1)
+    sndfile = audiolab.Sndfile('chess.ogg')
+    signal = np.mean(sndfile.read_frames(44100*90), axis=1)
     #signal = chirp(np.arange(2**18), 16.3516/44100, 2**18, 4185.01/44100,
     #               method='logarithmic')
     pieces = []
