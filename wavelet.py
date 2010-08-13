@@ -181,27 +181,16 @@ def smooth(matrix, n=20):
 
 if __name__ == '__main__':
     import pylab, time
-<<<<<<< HEAD
-    sndfile = audiolab.Sndfile('chess.ogg')
-    signal = np.mean(sndfile.read_frames(44100*30), axis=1)
-=======
     sndfile = audiolab.Sndfile('blinding_lights.ogg')
     signal = np.mean(sndfile.read_frames(44100*60), axis=1)
->>>>>>> 1b0eef67d63638a3e6175aa756097996214a4d8a
     #signal = chirp(np.arange(2**18), 16.3516/44100, 2**18, 4185.01/44100,
     #               method='logarithmic')
     pieces = []
     pcmpieces = []
     for piece in stream_wavelets(signal):
         print time.time()
-<<<<<<< HEAD
-        #pieces.append(np.abs(piece[:, ::20]))
-        pieces.append(timbre_color(np.abs(piece[:, ::200])))
-=======
         piece = timbre_color(np.abs(piece[:, ::SUBSAMPLE]))
         pieces.append(piece)
->>>>>>> 1b0eef67d63638a3e6175aa756097996214a4d8a
-
 
     wavelet_graph = np.concatenate(pieces, axis=1)
     pcm = reconstruct(wavelet_graph)
