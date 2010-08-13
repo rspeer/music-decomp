@@ -45,6 +45,9 @@ class AudioData(object):
                               window='hanning')
         return AudioData(sig, self.rate/factor)
 
+    def length(self):
+        return len(self.signal)/self.rate
+
     def play(self):
         audiolab.play(self.signal.T)
 
@@ -98,14 +101,20 @@ class MusicAnalyzer(object):
                 np.concatenate(pitch_chunks, axis=1))
 
     def live_plot(self, audio):
+        timeline = self.get_tatum_timeline(audio)
         timbre_chunks = []
         pitch_chunks = []
         for timbre, pitch in self.stream_analyze_timbre(audio, maxlen=None):
             timbre_chunks.append(timbre)
             pitch_chunks.append(pitch)
-            timbre_all = np.concatenate(timbre_chunks, axis=1)
-            pitch_all = np.concatenate(pitch_chunks, axis=1)
-            self.plot(timbre_all, pitch_all)
+            timbre_all = self.quantize_subsampled(
+                           np.concatenate(timbre_chunks, axis=1), timeline
+                         )
+            pitch_all = self.quantize_subsampled(
+                          np.concatenate(pitch_chunks, axis=1), timeline
+                        )
+            self.plot(timbre_all[:, -self.window_size*10:],
+                      pitch_all[:, -self.window_size*10:])
         return (timbre_all, pitch_all)
     
     def plot(self, timbre, pitch):
@@ -117,7 +126,27 @@ class MusicAnalyzer(object):
                       origin='lower', interpolation='nearest')
         pyplot.draw()
 
-    def reconstruct(self, timbre):
+    def get_tatum_timeline(self, audio):
+        track = audio.get_echonest()
+        times = []
+        for tatum in track.tatums:
+            times.append(tatum['start'])
+        times.append(audio.length())
+        return times
+    
+    def quantize_subsampled(self, data, timeline):
+        return self.quantize(data, timeline, self.samplerate / self.subsample)
+
+    def quantize(self, data, timeline, rate):
+        output = np.zeros(data.shape)
+        for timestep in xrange(len(timeline)-1):
+            start = timeline[timestep]*rate
+            end = timeline[timestep+1]*rate
+            if start > output.shape[1]: break
+            output[:, start:end] = np.mean(data[:, start:end], axis=1)
+        return output
+
+    def reconstruct(self, timbre, timeline):
         pcm = np.zeros((timbre.shape[1]*self.subsample,))
         angle = np.arange(timbre.shape[1]*self.subsample) * 2 * np.pi / self.samplerate
         for pitch in xrange(self.npitches):
@@ -235,7 +264,7 @@ class TimbreAnalyzer(object):
 
 
 if __name__ == '__main__':
-    audio = AudioData.from_file('../koyaanisqatsi.ogg')
+    audio = AudioData.from_file('../clocks.ogg')
     analyzer = MusicAnalyzer()
     timbre, pitch = analyzer.live_plot(audio)
 
