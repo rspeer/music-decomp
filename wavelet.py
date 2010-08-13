@@ -54,15 +54,12 @@ def morlet_freq_harmonic(f0, M):
 def downsample(signal, factor):
     return resample(signal, signal.shape[-1]/factor)
 
-fftfilters = np.zeros((nfilters, M), dtype='complex128')
+fftfilters = np.zeros((nfilters, M*2), dtype='complex128')
 for x in xrange(nfilters):
     filter1 = morlet_freq(A0 * 2.0**(x/12.0), M)
-    fftfilters[x] = fft(filter1)
+    fftfilters[x, :M] = fft(filter1)
 hanning_window = hanning(M)
 print "made filters"
-
-# global so we don't have to reallocate it over and over
-fftsignal = np.zeros((M,), dtype='complex128')
 
 def wavelet_detect(signal):
     """
@@ -72,9 +69,10 @@ def wavelet_detect(signal):
     The inevitable tradeoff comes in the form of time resolution in the bass
     notes.
     """
-    global fftsignal
-    fftsignal[:] = fft(signal * hanning_window).conj()
-    convolved = np.roll(ifft(fftfilters * fftsignal), M/2, axis=-1)[:, ::-1]
+    fftsignal = fft(signal * hanning_window).conj()
+    fftsignal = np.concatenate([fftsignal, np.zeros(fftsignal.shape)], axis=-1)
+    #convolved = ifft(fftfilters * fftsignal)[:, M-1::-1]
+    convolved = np.roll(ifft(fftfilters * fftsignal), M, axis=-1)[:, ::-2]
     return convolved * hanning_window
 
 def stream_wavelets(signal):
@@ -139,7 +137,7 @@ def detect_noise(matrix):
     noise_profile = np.exp(alignment)
     return noise_profile
 
-meansq = 0.00001
+meansq = EPS
 def timbre_color(matrix):
     # okay, this really is the evil kind of global var. I'll classify sometime
     global meansq
@@ -167,12 +165,13 @@ def smooth(matrix, n=20):
 if __name__ == '__main__':
     import pylab, time
     sndfile = audiolab.Sndfile('chess.ogg')
-    signal = np.mean(sndfile.read_frames(44100*90), axis=1)
+    signal = np.mean(sndfile.read_frames(44100*30), axis=1)
     #signal = chirp(np.arange(2**18), 16.3516/44100, 2**18, 4185.01/44100,
     #               method='logarithmic')
     pieces = []
     for piece in stream_wavelets(signal):
         print time.time()
+        #pieces.append(np.abs(piece[:, ::20]))
         pieces.append(timbre_color(np.abs(piece[:, ::200])))
 
     wavelet_graph = np.concatenate(pieces[1:-2], axis=1)
