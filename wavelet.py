@@ -84,25 +84,30 @@ def svd_reduce(matrix):
         U_prime[row, col] = 1 #U[row,col]
     return np.dot(U**3, V.T)
 
+from plca.harmonic_plca import HARMONIC_VALUES
+
+EPS = 1e-5
+def deharmonize(matrix):
+    F, T = matrix.shape
+    alignment = np.zeros((F, T))
+    matrix = np.concatenate([matrix, np.ones((60, T))*np.mean(matrix)]) + EPS
+    amplitude = np.sum(matrix, axis=0)
+    lmatrix = np.log(matrix)
+    for h, steps in HARMONIC_VALUES:
+        alignment += lmatrix[steps:steps+F] * 1.0/h
+    deharmonized = np.exp(alignment)
+    amp_adjust = np.sum(deharmonized, axis=0) / amplitude
+    return deharmonized / amp_adjust
+
 ALPHA = 0.5
 meansq = 0.00001
 def timbre_color(matrix):
     # okay, this really is the evil kind of global var. I'll classify sometime
     global meansq
-    matrix = np.concatenate([np.zeros((43, matrix.shape[-1])), matrix])
-    deharmonized = matrix[43:]
-    for h, steps in enumerate((12, 19, 24, 28, 31, 34, 36, 38, 40, 42, 43)):
-        harmonic = h + 2
-        deharmonized -= matrix[43-steps:-steps]/harmonic
-    bigger = np.concatenate([np.zeros((24, deharmonized.shape[-1])), deharmonized])
+    deharmonized = deharmonize(matrix)
     color = np.zeros(deharmonized.shape + (3,))
     baseline = np.maximum(0, deharmonized)
-    color[:,:,0] = (deharmonized + np.minimum(deharmonized/2, bigger[12:nfilters+12]))
-    color[:,:,1] = (deharmonized + np.minimum(deharmonized/3, bigger[19:nfilters+19]))
-    color[:,:,2] = (deharmonized + np.minimum(deharmonized/4, bigger[24:nfilters+24]))
-    color -= np.mean(color, axis=-1)[...,np.newaxis]
-    color = (color*100)
-    color = color + 0.75
+    color[:,:,:] = 1
     rgb = np.maximum(0, baseline[...,np.newaxis] * color)
     prev_meansq = meansq
     meansq = (meansq*(1.0-ALPHA)) + (np.mean(rgb*rgb) * ALPHA)
@@ -118,7 +123,7 @@ def smooth(matrix, n=20):
 
 if __name__ == '__main__':
     import pylab, time
-    sndfile = audiolab.Sndfile('clocks.ogg')
+    sndfile = audiolab.Sndfile('settler.ogg')
     signal = np.mean(sndfile.read_frames(44100*60), axis=1)
     #signal = chirp(np.arange(2**18), 16.3516/44100, 2**18, 4185.01/44100,
     #               method='logarithmic')

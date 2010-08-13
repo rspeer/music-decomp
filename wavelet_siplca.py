@@ -5,7 +5,7 @@ from scipy.fftpack import fft, ifft
 import numpy as np
 from scikits import audiolab
 from csc import divisi2
-from plca.harmonic_plca import SHIPLCA
+from plca.harmonic_plca import SHIPLCA, fixed_shiplca
 
 config.ECHO_NEST_API_KEY="LFYSHIOM0NNSDBCKJ"
 RATE = 44100
@@ -117,12 +117,16 @@ def analyze_music(filename):
 
 if __name__ == '__main__':
     import pylab, time
-    grid = analyze_music('koyaanisqatsi.ogg')
+    from csc import divisi2
+    #grid = analyze_music('high-hopes.ogg')
+    grid = divisi2.load('hopes_grid.pickle')
 
-    W, Z, H, norm, recon, logprob = SHIPLCA.analyze(grid, 3, win=(95, 1),
-                                                    niter=100)
-    rgb = np.rollaxis(H, 0, 3)
-    pylab.imshow(rgb/np.max(rgb)*3, aspect='auto', origin='lower')
+    W, Z, H, norm, recon, logprob = fixed_shiplca(grid, rank=3, win=(95, 1),
+                                                  niter=100,
+                                                 )
+    rgb = np.rollaxis(H[:3], 0, 3)
+    rgb /= np.max(rgb)/5
+    pylab.imshow(rgb, aspect='auto', origin='lower')
     pylab.show()
 
 #mfcc = np.abs(fft(np.log(output[16:112].T)))
