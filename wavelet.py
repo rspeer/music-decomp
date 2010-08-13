@@ -1,4 +1,4 @@
-from scipy.signal import fftconvolve, wavelets, resample, hanning, chirp
+from scipy.signal import fftconvolve, wavelets, resample, hanning, chirp, square, sawtooth
 from scipy.fftpack import fft, ifft
 import numpy as np
 from scikits import audiolab
@@ -10,6 +10,7 @@ M = 65536
 nfilters = 96
 EPS = 1e-8
 ALPHA = 0.5
+SUBSAMPLE = 256
 
 HARMONIC_VALUES = [(1, 0),
                    (2, 12),
@@ -31,6 +32,9 @@ HARMONIC_VALUES = [(1, 0),
                    (32, 60)]
 
 NOISE_SHAPE = hanning(25) / np.sum(hanning(25)) * 3.1
+
+def triangle(signal):
+    return np.abs(sawtooth(signal)) - 0.5
 
 def morlet_freq(f0, M):
     """
@@ -155,6 +159,19 @@ def timbre_color(matrix):
     meansq_smooth = np.linspace(np.sqrt(prev_meansq), np.sqrt(meansq), matrix.shape[-1])
     return np.minimum(rgb/meansq_smooth[np.newaxis, :, np.newaxis]/10, 1)
 
+def reconstruct(matrix):
+    pcm = np.zeros((matrix.shape[1]*SUBSAMPLE,))
+    angle = np.arange(matrix.shape[1]*SUBSAMPLE) * 2 * np.pi / RATE
+    for pitch in xrange(nfilters):
+        print pitch
+        freq = A0 * 2.0**(pitch/12.0)
+        square_wave = square(angle*freq)
+        triangle_wave = triangle(angle*freq)
+        pcm += np.repeat(matrix[pitch, :, 1], SUBSAMPLE) * square_wave
+        pcm += np.repeat(matrix[pitch, :, 2], SUBSAMPLE) * triangle_wave
+    pcm /= np.max(pcm)
+    return pcm
+
 def smooth(matrix, n=20):
     end = matrix.shape[1]-n
     result = matrix[:, 0:end]
@@ -164,20 +181,34 @@ def smooth(matrix, n=20):
 
 if __name__ == '__main__':
     import pylab, time
+<<<<<<< HEAD
     sndfile = audiolab.Sndfile('chess.ogg')
     signal = np.mean(sndfile.read_frames(44100*30), axis=1)
+=======
+    sndfile = audiolab.Sndfile('blinding_lights.ogg')
+    signal = np.mean(sndfile.read_frames(44100*60), axis=1)
+>>>>>>> 1b0eef67d63638a3e6175aa756097996214a4d8a
     #signal = chirp(np.arange(2**18), 16.3516/44100, 2**18, 4185.01/44100,
     #               method='logarithmic')
     pieces = []
+    pcmpieces = []
     for piece in stream_wavelets(signal):
         print time.time()
+<<<<<<< HEAD
         #pieces.append(np.abs(piece[:, ::20]))
         pieces.append(timbre_color(np.abs(piece[:, ::200])))
+=======
+        piece = timbre_color(np.abs(piece[:, ::SUBSAMPLE]))
+        pieces.append(piece)
+>>>>>>> 1b0eef67d63638a3e6175aa756097996214a4d8a
 
-    wavelet_graph = np.concatenate(pieces[1:-2], axis=1)
-    svdgraph = wavelet_graph
+
+    wavelet_graph = np.concatenate(pieces, axis=1)
+    pcm = reconstruct(wavelet_graph)
+    audiolab.play(pcm)
+    
     pylab.figure(1)
-    pylab.imshow(svdgraph, aspect='auto', origin='lower')
+    pylab.imshow(wavelet_graph, aspect='auto', origin='lower')
     pylab.show()
 
 #mfcc = np.abs(fft(np.log(output[16:112].T)))
