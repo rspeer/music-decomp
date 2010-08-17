@@ -1,10 +1,15 @@
 import numpy as np
-from matplotlib import pyplot
+#from matplotlib import pyplot as plt
+import pylab as plt
 from scipy import signal
 from scipy.fftpack import fft, ifft
 from scikits import audiolab
 
-from pyechonest.track import track_from_filename
+try:
+    from pyechonest.track import track_from_filename
+except ImportError:
+    from pyechonest.track import Track as track_from_filename
+
 from pyechonest import config
 config.ECHO_NEST_API_KEY="LFYSHIOM0NNSDBCKJ"
 import time
@@ -89,42 +94,32 @@ class MusicAnalyzer(object):
         for chunk in self.stream_analyze_pitch(audio, maxlen):
             print time.time()
             mod_chunk = np.abs(chunk)[:, ::self.subsample]
-            yield (self.timbre_analyzer.analyze(mod_chunk), mod_chunk)
+            yield self.timbre_analyzer.analyze(mod_chunk)
 
     def analyze_timbre(self, audio, maxlen=60):
-        pitch_chunks = []
         timbre_chunks = []
-        for timbre, pitch in self.stream_analyze_timbre(audio, maxlen):
-            pitch_chunks.append(pitch)
+        for timbre in self.stream_analyze_timbre(audio, maxlen):
             timbre_chunks.append(timbre)
-        return (np.concatenate(timbre_chunks, axis=1),
-                np.concatenate(pitch_chunks, axis=1))
+        return np.concatenate(timbre_chunks, axis=1)
 
-    def live_plot(self, audio):
-        timeline = self.get_tatum_timeline(audio)
+    def live_plot(self, audio, maxlen=None):
+        #timeline = self.get_tatum_timeline(audio)
+        
+        # for zak and sara
+        timeline = np.arange(5000) * .109022 + 0.28776
         timbre_chunks = []
-        pitch_chunks = []
-        for timbre, pitch in self.stream_analyze_timbre(audio, maxlen=None):
+        for timbre in self.stream_analyze_timbre(audio, maxlen):
             timbre_chunks.append(timbre)
-            pitch_chunks.append(pitch)
             timbre_all = self.quantize_subsampled(
                            np.concatenate(timbre_chunks, axis=1), timeline
                          )
-            pitch_all = self.quantize_subsampled(
-                          np.concatenate(pitch_chunks, axis=1), timeline
-                        )
-            self.plot(timbre_all[:, -self.window_size*10:],
-                      pitch_all[:, -self.window_size*10:])
-        return (timbre_all, pitch_all)
+            self.plot(timbre_all[:, -self.window_size*10:])
+        return timbre_all, timeline
     
-    def plot(self, timbre, pitch):
-        pyplot.subplot(211)
-        pyplot.imshow(np.minimum(1.0, timbre*2), aspect='auto',
+    def plot(self, timbre):
+        plt.imshow(np.minimum(1.0, timbre*2), aspect='auto',
                      origin='lower', interpolation='nearest')
-        pyplot.subplot(212)
-        pyplot.imshow(np.minimum(1.0, pitch/np.max(pitch)*5), aspect='auto',
-                      origin='lower', interpolation='nearest')
-        pyplot.draw()
+        plt.draw()
 
     def get_tatum_timeline(self, audio):
         track = audio.get_echonest()
@@ -143,10 +138,10 @@ class MusicAnalyzer(object):
             start = timeline[timestep]*rate
             end = timeline[timestep+1]*rate
             if start > output.shape[1]: break
-            output[:, start:end] = np.mean(data[:, start:end], axis=1)
+            output[:, start:end] = np.mean(data[:, start:end], axis=1)[:, np.newaxis]
         return output
 
-    def reconstruct(self, timbre, timeline):
+    def reconstruct(self, timbre):
         pcm = np.zeros((timbre.shape[1]*self.subsample,))
         angle = np.arange(timbre.shape[1]*self.subsample) * 2 * np.pi / self.samplerate
         for pitch in xrange(self.npitches):
@@ -260,15 +255,16 @@ class TimbreAnalyzer(object):
         self.meansq = (self.meansq*(1.0-self.smoothing)) + (np.mean(rgb*rgb) * self.smoothing)
         meansq_smooth = np.linspace(np.sqrt(prev_meansq), np.sqrt(self.meansq),
                                     matrix.shape[-1])
-        return np.minimum(rgb/meansq_smooth[np.newaxis, :, np.newaxis]/10, 1)
-
+        return np.minimum(rgb/meansq_smooth[np.newaxis, :, np.newaxis]/2, 1)
 
 if __name__ == '__main__':
-    audio = AudioData.from_file('../clocks.ogg')
+    audio = AudioData.from_file('../zak.ogg')
     analyzer = MusicAnalyzer()
-    timbre, pitch = analyzer.live_plot(audio)
+    plt.plot(analyzer.hanning_window)
+    plt.show()
+    timbre, timeline = analyzer.live_plot(audio, 30)
+    audio_out = analyzer.reconstruct(timbre)
+    audio_out.play()
 
-#mfcc = np.abs(fft(np.log(output[16:112].T)))
-#pylab.figure(2)
-#pylab.imshow(mfcc[::10, 1:65].T, aspect='auto', origin='lower')
+    
 
