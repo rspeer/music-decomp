@@ -80,7 +80,7 @@ class MusicAnalyzer(object):
         
         M = self.window_size
         skip = True
-        for frame in xrange(sig.shape[-1]*2/M - 1):
+        for frame in xrange(1, sig.shape[-1]*2/M - 1):
             chunk = self.filterbank.analyze(sig[frame*M/2 : (frame+2)*M/2],
                                             window=self.hanning_window)
             if skip:
@@ -103,23 +103,36 @@ class MusicAnalyzer(object):
         return np.concatenate(timbre_chunks, axis=1)
 
     def live_plot(self, audio, maxlen=None):
-        #timeline = self.get_tatum_timeline(audio)
-        
-        # for zak and sara
-        timeline = np.arange(5000) * .109022 + 0.28776
-        timbre_chunks = []
+        timbre_chunks = [np.zeros((self.npitches, self.window_size // self.subsample, 3)) for i in xrange(20)]
+        counter = 0
+        fig = plt.figure(frameon=False)
+        ax = fig.add_subplot(111)
+        ax.set_axis_off()
+        fig.set_dpi(100)
+        fig.set_size_inches(self.window_size // self.subsample * 20 / 100.0,
+                                 self.npitches * 4 / 100.0)
+        self.outfile = open('timbre.dat', 'wb')
+                            
         for timbre in self.stream_analyze_timbre(audio, maxlen):
             timbre_chunks.append(timbre)
-            timbre_all = self.quantize_subsampled(
-                           np.concatenate(timbre_chunks, axis=1), timeline
-                         )
-            self.plot(timbre_all[:, -self.window_size*10:])
-        return timbre_all, timeline
+            timbre_chunks = timbre_chunks[-20:]
+            timbre_all = np.concatenate(timbre_chunks, axis=1)
+            self.save_data(timbre)
+            self.plot(timbre_all)
+            counter += 1
+        self.outfile.close()
+        return timbre_all
     
     def plot(self, timbre):
         plt.imshow(np.minimum(1.0, timbre*2), aspect='auto',
-                     origin='lower', interpolation='nearest')
+                   origin='lower', interpolation='nearest')
         plt.draw()
+
+    def save_data(self, timbre):
+        bytes = np.array(np.minimum(255, timbre*512), dtype=np.uint8)
+        for i in xrange(bytes.shape[1]):
+            self.outfile.write(bytes[:,i].tostring())
+
 
     def get_tatum_timeline(self, audio):
         track = audio.get_echonest()
@@ -258,13 +271,9 @@ class TimbreAnalyzer(object):
         return np.minimum(rgb/meansq_smooth[np.newaxis, :, np.newaxis]/2, 1)
 
 if __name__ == '__main__':
-    audio = AudioData.from_file('../zak.ogg')
-    analyzer = MusicAnalyzer()
-    plt.plot(analyzer.hanning_window)
-    plt.show()
-    timbre, timeline = analyzer.live_plot(audio, 30)
-    audio_out = analyzer.reconstruct(timbre)
-    audio_out.play()
-
-    
+    audio = AudioData.from_file('../chess.ogg')
+    analyzer = MusicAnalyzer(window_size=44100, subsample=1470)
+    #plt.plot(analyzer.hanning_window)
+    #plt.show()
+    timbre = analyzer.live_plot(audio)
 
