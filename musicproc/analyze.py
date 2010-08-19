@@ -4,6 +4,7 @@ import pylab as plt
 from scipy import signal
 from scipy.fftpack import fft, ifft
 from scikits import audiolab
+from music_theory import HARMONIC_VALUES
 
 try:
     from pyechonest.track import track_from_filename
@@ -68,7 +69,7 @@ class MusicAnalyzer(object):
         self.filterbank = MorletFilterBank(lowfreq, npitches,
                                            self.window_size, self.samplerate)
         self.hanning_window = signal.hanning(self.window_size)
-        self.timbre_analyzer = TimbreAnalyzer()
+        self.timbre_analyzer = BasicTimbreAnalyzer()
     
     def stream_analyze_pitch(self, audio, maxlen):
         # TODO: accept an actual stream as input
@@ -207,12 +208,7 @@ class MorletFilterBank(object):
         convolved = np.roll(ifft(self.filters * fftsignal), self.window_size, axis=-1)[:, ::-2]
         return convolved * window
 
-class TimbreAnalyzer(object):
-    harmonic_values = [(1, 0), (2, 12), (3, 19), (4, 24), (5, 28), (6, 31),
-                       (8, 36), (9, 38), (10, 40), (12, 43), (15, 47), (16, 48),
-                       (18, 50), (20, 52), (24, 55), (27, 57), (30, 59),
-                       (32, 60)]
-    
+class BasicTimbreAnalyzer(object):
     def __init__(self, sawtooth_scale=1.0, triangle_scale=3.2, noise_scale=3.1, epsilon=1e-8):
         # Until I can compute a legitimate prior, these will have to do.
         self.sawtooth_scale = sawtooth_scale
@@ -229,10 +225,10 @@ class TimbreAnalyzer(object):
         matrix = np.concatenate([matrix, np.ones((60, T))*np.mean(matrix)]) + self.epsilon
         lmatrix = np.log(matrix)
         if shape == 'sawtooth':
-            for h, steps in TimbreAnalyzer.harmonic_values:
+            for h, steps in HARMONIC_VALUES:
                 alignment += lmatrix[steps:steps+F] * self.sawtooth_scale/h
         elif shape == 'triangle':
-            for h, steps in TimbreAnalyzer.harmonic_values:
+            for h, steps in HARMONIC_VALUES:
                 if h % 2 == 1:
                     alignment += lmatrix[steps:steps+F] * self.triangle_scale/h/h
         else:
