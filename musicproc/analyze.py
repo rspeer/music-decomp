@@ -97,6 +97,12 @@ class MusicAnalyzer(object):
             mod_chunk = np.abs(chunk)[:, ::self.subsample]
             yield self.timbre_analyzer.analyze(mod_chunk)
 
+    def analyze_pitch(self, audio, maxlen=60):
+        pitch_chunks = []
+        for pitch in self.stream_analyze_pitch(audio, maxlen):
+            pitch_chunks.append(pitch)
+        return np.concatenate(pitch_chunks, axis=1)
+
     def analyze_timbre(self, audio, maxlen=60):
         timbre_chunks = []
         for timbre in self.stream_analyze_timbre(audio, maxlen):
@@ -112,16 +118,16 @@ class MusicAnalyzer(object):
         fig.set_dpi(100)
         fig.set_size_inches(self.window_size // self.subsample * 20 / 100.0,
                                  self.npitches * 4 / 100.0)
-        self.outfile = open('timbre.dat', 'wb')
+        #self.outfile = open('timbre.dat', 'wb')
                             
         for timbre in self.stream_analyze_timbre(audio, maxlen):
             timbre_chunks.append(timbre)
             timbre_chunks = timbre_chunks[-20:]
             timbre_all = np.concatenate(timbre_chunks, axis=1)
-            self.save_data(timbre)
+            #self.save_data(timbre)
             self.plot(timbre_all)
             counter += 1
-        self.outfile.close()
+        #self.outfile.close()
         return timbre_all
     
     def plot(self, timbre):
@@ -154,6 +160,9 @@ class MusicAnalyzer(object):
             if start > output.shape[1]: break
             output[:, start:end] = np.mean(data[:, start:end], axis=1)[:, np.newaxis]
         return output
+    
+    def quantize_equal(self, data, width):
+        return self.quantize(data, np.arange(data.shape[1])[::width], 1)[:, ::width]
 
     def reconstruct(self, timbre):
         pcm = np.zeros((timbre.shape[1]*self.subsample,))
@@ -165,6 +174,18 @@ class MusicAnalyzer(object):
             triangle_wave = triangle(angle*freq)
             pcm += np.repeat(timbre[pitch, :, 1], self.subsample) * square_wave
             pcm += np.repeat(timbre[pitch, :, 2], self.subsample) * triangle_wave
+        pcm /= np.max(pcm)
+        return AudioData(pcm, self.samplerate)
+
+    def reconstruct_WZH(self, plca, W, Z, H):
+        WZH = plca.reconstruct(W, Z, H, circular=[False, False])
+        pcm = np.zeros((WZH.shape[1]*self.subsample,))
+        angle = np.arange(WZH.shape[1]*self.subsample) * 2 * np.pi / self.samplerate
+        for pitch in xrange(self.npitches):
+            print pitch
+            freq = self.lowfreq * 2.0**(pitch/12.0)
+            sine = np.sin(angle*freq)
+            pcm += np.repeat(WZH[pitch], self.subsample) * sine
         pcm /= np.max(pcm)
         return AudioData(pcm, self.samplerate)
 
@@ -271,5 +292,5 @@ if __name__ == '__main__':
     analyzer = MusicAnalyzer(window_size=44100, subsample=1470)
     #plt.plot(analyzer.hanning_window)
     #plt.show()
-    timbre = analyzer.live_plot(audio)
+    pitch = analyzer.quantize_equal(np.abs(analyzer.analyze_pitch(audio, 5)), 1470)
 
