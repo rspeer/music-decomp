@@ -292,5 +292,5 @@ if __name__ == '__main__':
     analyzer = MusicAnalyzer(window_size=44100, subsample=1470)
     #plt.plot(analyzer.hanning_window)
     #plt.show()
-    pitch = analyzer.quantize_equal(np.abs(analyzer.analyze_pitch(audio, 5)), 1470)
+    pitch = analyzer.quantize_equal(np.abs(analyzer.analyze_pitch(audio, 15)), 1470)
 

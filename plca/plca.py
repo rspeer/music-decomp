@@ -368,7 +368,7 @@ class PLCA(object):
         """Performs the M-step of the EM parameter estimation algorithm.
 
         Computes updated estimates of W, Z, and H using the posterior
-        distribution computer in the E-step.
+        distribution computed in the E-step.
         """
         Zevidence = self._fix_negative_values(self.VRW.sum(0) + self.alphaZ - 1)
         initialZ = normalize(Zevidence)
@@ -393,7 +393,10 @@ class PLCA(object):
         return x
 
     def _prune_undeeded_bases(self, W, Z, H, curriter):
-        """Discards bases which do not contribute to the decomposition"""
+        """
+        Discards bases which do not contribute to the decomposition, in that
+        their Z weight is near zero.
+        """
         threshold = 10 * EPS
         zidx = np.argwhere(Z > threshold).flatten()
         if len(zidx) < self.rank and curriter >= self.minpruneiter:
@@ -429,7 +432,7 @@ class SIPLCA(PLCA):
 
     Decompose V into \sum_k W_k * z_k h_k^T where * denotes
     convolution.  Each basis W_k is a matrix.  Therefore, unlike PLCA,
-    `W` has shape (`F`, `win`, `rank`). This is the model used in [1].
+    `W` has shape (`F`, `rank`, `win`). This is the model used in [1].
 
     See Also
     --------
@@ -459,6 +462,10 @@ class SIPLCA(PLCA):
 
             **Note** that the prior is not parametrized in the
             standard way where the uninformative prior has alpha=1.
+        betaW, betaZ, betaH : non-negative float
+            Entropic prior parameters for `W`, `Z`, and `H`.  Large
+            values lead to sparser distributions.  Defaults to 0 (no
+            prior).
         """
         PLCA.__init__(self, V, rank, **kwargs)
 
@@ -562,7 +569,7 @@ class SIPLCA(PLCA):
         initialH = normalize(Hevidence, axis=1)
         H = self._apply_entropic_prior_and_normalize(
             initialH, Hevidence, self.betaH, nu=self.nu, axis=1)
-
+  
         return self._prune_undeeded_bases(W, Z, H, curriter)
 
 
@@ -594,7 +601,7 @@ class SIPLCA2(SIPLCA):
             Rank of the decomposition (i.e. number of columns of `W`
             and rows of `H`).
         win : int or tuple of 2 ints
-            `win[0]` is the length of the convolutive bases.  `win[1]`
+            `win[1]` is the length of the convolutive bases.  `win[0]`
             is maximum frequency shift.  Defaults to (1, 1).
         circular : boolean or tuple of 2 booleans
             If `circular[0]` (`circular[1]`) is True, data shifted
@@ -608,6 +615,8 @@ class SIPLCA2(SIPLCA):
 
             **Note** that the prior is not parametrized in the
             standard way where the uninformative prior has alpha=1.
+        betaW, betaZ, betaH : float
+            
         """
         PLCA.__init__(self, V, rank, **kwargs)
         self.rank = rank
