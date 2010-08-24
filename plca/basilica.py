@@ -132,7 +132,8 @@ class Basilica(SIPLCA2):
         return logprob, WZH
 
     def do_mstep(self, curriter):
-        Zevidence = self._fix_negative_values(self.VRW.sum(2).sum(0)
+        Zevidence = self._fix_negative_values(self.VRWf.sum(0)
+                                              + self.VRWt.sum(1)
                                               + self.alphaZ - 1)
         initialZ = normalize(Zevidence)
         Z = self._apply_entropic_prior_and_normalize(
@@ -155,8 +156,7 @@ class Basilica(SIPLCA2):
         H = self._apply_entropic_prior_and_normalize(
             initialH, Hevidence, self.betaH, nu=self.nu, axis=[1, 2])
 
-        return Wf, Wt, Z, H
-        #return self._prune_undeeded_bases(Wf, Wt, Z, H, curriter)
+        return self._prune_undeeded_bases(Wf, Wt, Z, H, curriter)
     
     def compute_logprob(self, Wf, Wt, Z, H, recon):
         logprob = np.sum(self.V * np.log(recon + EPS*recon))
@@ -231,6 +231,14 @@ class Basilica(SIPLCA2):
             self.VRWf = self.VRWf[:,zidx]
             self.VRWt = self.VRWt[zidx,:]
             self.VRH = self.VRH[:,zidx]
+            if isinstance(self.alphaWf, np.ndarray):
+                self.alphaWf = self.alphaWf[:,zidx]
+            if isinstance(self.alphaWt, np.ndarray):
+                self.alphaWt = self.alphaWt[zidx,:]
+            if isinstance(self.alphaH, np.ndarray):
+                self.alphaH = self.alphaH[zidx,:]
+            if isinstance(self.alphaZ, np.ndarray):
+                self.alphaZ = self.alphaZ[zidx]
         return Wf, Wt, Z, H
 
 

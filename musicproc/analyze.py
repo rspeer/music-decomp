@@ -177,6 +177,17 @@ class MusicAnalyzer(object):
         pcm /= np.max(pcm)
         return AudioData(pcm, self.samplerate)
 
+    def reconstruct_W(self, W):
+        pcm = np.zeros((W.shape[1]*self.subsample,))
+        angle = np.arange(W.shape[1]*self.subsample) * 2 * np.pi / self.samplerate
+        for pitch in xrange(self.npitches):
+            print pitch
+            freq = self.lowfreq * 2.0**(pitch/12.0)
+            sine = np.sin(angle*freq)
+            pcm += np.repeat(W[pitch], self.subsample) * sine
+        pcm /= np.max(pcm)
+        return AudioData(pcm, self.samplerate)
+        
     def reconstruct_WZH(self, plca, W, Z, H):
         WZH = plca.reconstruct(W, Z, H, circular=[False, False])
         pcm = np.zeros((WZH.shape[1]*self.subsample,))
