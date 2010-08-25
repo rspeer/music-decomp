@@ -159,17 +159,17 @@ class Basilica(SIPLCA2):
         return self._prune_undeeded_bases(Wf, Wt, Z, H, curriter)
     
     def compute_logprob(self, Wf, Wt, Z, H, recon):
-        logprob = np.sum(self.V * np.log(recon + EPS*recon))
+        logprob = np.sum(self.V * np.log(recon + EPS))
         # Add Dirichlet and Entropic priors.
-        logprob += (np.sum((self.alphaWf - 1) * np.log(Wf + EPS*Wf))
-                    + np.sum((self.alphaWt - 1) * np.log(Wt + EPS*Wt))
-                    + np.sum((self.alphaZ - 1) * np.log(Z + EPS*Z))
-                    + np.sum((self.alphaH - 1) * np.log(H + EPS*H)))
+        logprob += (np.sum((self.alphaWf - 1) * np.log(Wf + EPS))
+                    + np.sum((self.alphaWt - 1) * np.log(Wt + EPS))
+                    + np.sum((self.alphaZ - 1) * np.log(Z + EPS))
+                    + np.sum((self.alphaH - 1) * np.log(H + EPS)))
         # Add Entropic priors.
-        logprob += (self.betaWf * np.sum(Wf * np.log(Wf + EPS*Wf))
-                    + self.betaWt * np.sum(Wt * np.log(Wt + EPS*Wt))
-                    + self.betaZ * np.sum(Z * np.log(Z + EPS*Z))
-                    + self.betaH * np.sum(H * np.log(H + EPS*H)))
+        logprob += (self.betaWf * np.sum(Wf * np.log(Wf + EPS))
+                    + self.betaWt * np.sum(Wt * np.log(Wt + EPS))
+                    + self.betaZ * np.sum(Z * np.log(Z + EPS))
+                    + self.betaH * np.sum(H * np.log(H + EPS)))
         return logprob
 
     def plot(self, V, Wf, Wt, Z, H, curriter=-1):

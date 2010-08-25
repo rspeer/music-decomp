@@ -78,7 +78,7 @@ def normalize(A, axis=None):
         norm.shape = nshape
     return A / norm
 
-def shift(a, shift, axis=None, circular=True):
+def shift(a, shift, axis=None, circular=True, average=True):
     """Shift array along a given axis.
 
     If circular is False, zeros are inserted for elements rolled off
@@ -89,6 +89,8 @@ def shift(a, shift, axis=None, circular=True):
     np.roll
     """
     aroll = np.roll(a, shift, axis)
+    fill = np.mean(a, axis)
+    if not average: fill = fill*0
     if not circular and shift != 0:
         if axis is None:
             arollflattened = aroll.flatten()
@@ -99,11 +101,13 @@ def shift(a, shift, axis=None, circular=True):
             aroll = np.reshape(arollflattened, aroll.shape)
         else:
             index = [slice(None)] * a.ndim
+            fill_index = [slice(None)] * a.ndim
+            fill_index[axis] = np.newaxis
             if shift > 0:
                 index[axis] = slice(0, shift)
             elif shift < 0:
                 index[axis] = slice(shift, None)
-            aroll[index] = 0
+            aroll[index] = fill[fill_index]
     return aroll
 
 

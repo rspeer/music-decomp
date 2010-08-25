@@ -15,7 +15,8 @@ def attack_release(nsteps, a, r, power=1.0):
     curve = np.zeros((nsteps,))
     curve[:a] = np.linspace(0.0, 1.0, a, endpoint=False)
     curve[a:a+r] = np.linspace(1.0, 0.0, r, endpoint=False)
-    return curve ** power
+    result = curve ** power
+    return result / np.sum(result)
 
 def adsr(nsteps, a, d, s, st, r):
     curve = np.zeros((nsteps,))

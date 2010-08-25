@@ -68,7 +68,8 @@ class MusicAnalyzer(object):
         self.epsilon = epsilon
         self.filterbank = MorletFilterBank(lowfreq, npitches,
                                            self.window_size, self.samplerate)
-        self.hanning_window = signal.hanning(self.window_size)
+        #self.filter_window = signal.hanning(self.window_size)
+        self.filter_window = np.ones((self.window_size,))
         self.timbre_analyzer = BasicTimbreAnalyzer()
     
     def stream_analyze_pitch(self, audio, maxlen):
@@ -83,7 +84,7 @@ class MusicAnalyzer(object):
         skip = True
         for frame in xrange(1, sig.shape[-1]*2/M - 1):
             chunk = self.filterbank.analyze(sig[frame*M/2 : (frame+2)*M/2],
-                                            window=self.hanning_window)
+                                            window=self.filter_window)
             if skip:
                 skip = False
             else:
@@ -301,7 +302,7 @@ class BasicTimbreAnalyzer(object):
 if __name__ == '__main__':
     audio = AudioData.from_file('../chess.ogg')
     analyzer = MusicAnalyzer(window_size=44100, subsample=1470)
-    #plt.plot(analyzer.hanning_window)
+    #plt.plot(analyzer.filter_window)
     #plt.show()
     pitch = analyzer.quantize_equal(np.abs(analyzer.analyze_pitch(audio, 15)), 1470)
 
