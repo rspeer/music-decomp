@@ -22,6 +22,25 @@ def triangle(sig):
     """
     return np.abs(signal.sawtooth(sig)) - 0.5
 
+D1 = np.array([[1.0, -1.0]])
+D2 = np.array([[-0.5, 1.0, -0.5]])
+
+def derivative(sig):
+    if sig.ndim == 2:
+        return signal.convolve2d(sig, D1)[:, 1:]
+    elif sig.ndim == 1:
+        return signal.convolve(sig, D1[0])[1:]
+    else:
+        raise ValueError
+
+def second_derivative(sig):
+    if sig.ndim == 2:
+        return signal.convolve2d(sig, D2)[:, 2:]
+    elif sig.ndim == 1:
+        return signal.convolve(sig, D2[0])[2:]
+    else:
+        raise ValueError
+
 class AudioData(object):
     def __init__(self, sig, rate, filename=None):
         self.signal = sig
@@ -293,4 +312,5 @@ if __name__ == '__main__':
     #plt.plot(analyzer.hanning_window)
     #plt.show()
     pitch = analyzer.quantize_equal(np.abs(analyzer.analyze_pitch(audio, 15)), 1470)
+    pitch2 = second_derivative(pitch)
 
