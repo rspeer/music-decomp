@@ -3,10 +3,10 @@ import numpy as np
 def harmonic_prior(npitches, nperc, nharmonic, nfree):
     N = nharmonic + nperc + nfree
     prior = np.zeros((npitches, N))
-    prior[:, :nperc] = 0.00001
-    prior[:, nperc:] = -0.00001
+    prior[:, :nperc] = 0.0001
+    prior[:, nperc:] = -0.001
     for harmonic, steps in HARMONIC_VALUES:
-        prior[steps, nperc:] = 0.001/harmonic
+        prior[steps, nperc:] = 0.0001/harmonic
     for harmonic, steps in HARMONIC_VALUES[1:]:
         prior[steps, nperc+nharmonic:] = 0
     return prior
@@ -27,10 +27,10 @@ def adsr(nsteps, a, d, s, st, r):
     return curve
 
 envelope_prior = np.vstack([
-    attack_release(30, 1, 5, 2.0),
-    attack_release(30, 2, 10, 1.4),
-    attack_release(30, 3, 15, 1.0),
-    attack_release(30, 4, 20, 0.7),
-    attack_release(30, 5, 25, 0.5)
+    attack_release(5, 0, 5, 1.0),
+    attack_release(5, 0, 5, 1.0),
+    attack_release(5, 0, 5, 1.0),
+    attack_release(5, 0, 5, 1.0),
+    attack_release(5, 0, 5, 1.0)
 ])
 

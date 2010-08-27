@@ -78,7 +78,7 @@ def normalize(A, axis=None):
         norm.shape = nshape
     return A / norm
 
-def shift(a, shift, axis=None, circular=True, average=True):
+def shift(a, shift, axis=None, circular=True, average=False):
     """Shift array along a given axis.
 
     If circular is False, zeros are inserted for elements rolled off

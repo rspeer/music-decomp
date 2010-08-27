@@ -15,6 +15,9 @@ from pyechonest import config
 config.ECHO_NEST_API_KEY="LFYSHIOM0NNSDBCKJ"
 import time
 
+def deriv_decay(sig, decay=0.9):
+    return sig[:, 1:] - sig[:,:-1]*decay
+
 def triangle(sig):
     """
     Make a triangle wave from a signal (in radians), similarly to signal.square
@@ -188,18 +191,10 @@ class MusicAnalyzer(object):
             pcm += np.repeat(W[pitch], self.subsample) * sine
         pcm /= np.max(pcm)
         return AudioData(pcm, self.samplerate)
-        
+    
     def reconstruct_WZH(self, plca, W, Z, H):
         WZH = plca.reconstruct(W, Z, H, circular=[False, False])
-        pcm = np.zeros((WZH.shape[1]*self.subsample,))
-        angle = np.arange(WZH.shape[1]*self.subsample) * 2 * np.pi / self.samplerate
-        for pitch in xrange(self.npitches):
-            print pitch
-            freq = self.lowfreq * 2.0**(pitch/12.0)
-            sine = np.sin(angle*freq)
-            pcm += np.repeat(WZH[pitch], self.subsample) * sine
-        pcm /= np.max(pcm)
-        return AudioData(pcm, self.samplerate)
+        return self.reconstruct_W(WZH)
 
 class MorletFilterBank(object):
     def __init__(self, lowfreq, npitches, window_size, samplerate,
@@ -301,8 +296,8 @@ class BasicTimbreAnalyzer(object):
 
 if __name__ == '__main__':
     audio = AudioData.from_file('../chess.ogg')
-    analyzer = MusicAnalyzer(window_size=44100, subsample=1470)
+    analyzer = MusicAnalyzer(window_size=44100, subsample=735)
     #plt.plot(analyzer.filter_window)
     #plt.show()
-    pitch = analyzer.quantize_equal(np.abs(analyzer.analyze_pitch(audio, 15)), 1470)
+    pitch = analyzer.quantize_equal(np.abs(analyzer.analyze_pitch(audio, 15)), 735)
 
