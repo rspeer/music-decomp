@@ -78,7 +78,7 @@ def normalize(A, axis=None):
         norm.shape = nshape
     return A / norm
 
-def shift(a, shift, axis=None, circular=True, average=True):
+def shift(a, shift, axis=None, circular=True, average=False):
     """Shift array along a given axis.
 
     If circular is False, zeros are inserted for elements rolled off
@@ -584,11 +584,11 @@ class SIPLCA2(SIPLCA):
     PLCA and SIPLCA, the activations for each basis `H_k` describes
     when the k-th basis is active in time *and* at what vertical
     (frequency) offset.  Therefore, unlike PLCA and SIPLCA, `H` has
-    shape (`rank`, `win[1]`, `T`).
+    shape (`rank`, `win[0]`, `T`).
 
     Note that this is not the same as the 2D-SIPLCA decomposition
     described in Smaragdis and Raj, 2007.  `W` has the same shape as
-    in SIPLCA, regardless of `win[1]`.
+    in SIPLCA, regardless of `win[0]`.
 
     See Also
     --------

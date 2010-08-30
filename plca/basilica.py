@@ -1,7 +1,117 @@
-from plca import SIPLCA2, normalize, logger, plt, shift, EPS, plottools
+from plca import SIPLCA, SIPLCA2, normalize, logger, plt, shift, EPS, plottools
 import numpy as np
+from numpy import newaxis
+class Basilica(object):
+    def __init__(self, V, rank, t_win, alphaWf=0, alphaWt=0, betaWf=0, betaWt=0,
+                 betaH=0):
+        # Find out if other H parameters are necessary?
+        # TODO: incremental V
+        self.V = V / V.sum()
+        self.f_steps, self.t_steps = self.V.shape
+        self.t_win = t_win
+        self.rank = rank
+        H = np.concatenate([self.V]*rank, axis=1)
+        Hflat = H.flatten()[newaxis,:]
+        Vflat = self.V.flatten()[newaxis,:]
 
-class Basilica(SIPLCA2):
+        # Make the time-independent frequency analyzer
+        self.freq_analyzer = SIPLCA2(H, rank, (self.f_steps, 1),
+                                     alphaW=alphaWf[newaxis,...],
+                                     betaW=betaWf, betaH=betaH)
+        self.meta_freq_analyzer = SIPLCA2(self.V, rank, (self.f_steps, 1),
+                                          alphaW=alphaWf[newaxis,...],
+                                          betaW=betaWf, betaH=betaH)
+
+        # Make the frequency-independent time-envelope analyzer
+        self.time_analyzer = SIPLCA(Hflat, rank, self.t_win,
+                                    alphaW=alphaWt[newaxis,...],
+                                    betaW=betaWt, betaH=betaH)
+        self.meta_time_analyzer = SIPLCA(Vflat, rank, self.t_win,
+                                         alphaW=alphaWt[newaxis,...],
+                                         betaW=betaWt, betaH=betaH)
+
+    def run_freq(self, Vf, Wf=None, Zf=None, Hf=None, niter=5):
+        self.freq_analyzer.V = Vf
+        if Wf is None or Zf is None or Hf is None:
+            initW, initZ, initH = self.freq_analyzer.initialize()
+            if Wf is None: Wf = initW
+            if Zf is None: Zf = initZ
+            if Hf is None: Hf = initH
+        
+        for iter in xrange(niter):
+            logprob, WZH = self.freq_analyzer.do_estep(Wf, Zf, Hf)
+            logger.info('Iteration f%d: logprob = %f', iter, logprob)
+            Wf, Zf, Hf = self.freq_analyzer.do_mstep(iter)
+        self.freq_analyzer.plot(Vf, Wf, Zf, Hf, iter)
+        
+        meta_logprob, meta_WZH = self.meta_freq_analyzer.do_estep(Wf, Zf, Hf)
+        meta_Wf, meta_Zf, meta_Hf = self.meta_freq_analyzer.do_mstep(0)
+        return Wf, Zf, Hf, meta_Wf, meta_Zf, meta_Hf
+    
+    # now do the same for run_time
+    def run_time(self, Vt, Wt=None, Zt=None, Ht=None, niter=5):
+        self.time_analyzer.V = Vt
+        if Wt is None or Zt is None or Ht is None:
+            initW, initZ, initH = self.time_analyzer.initialize()
+            if Wt is None: Wt = initW
+            if Zt is None: Zt = initZ
+            if Ht is None: Ht = initH
+
+        for iter in xrange(niter):
+            logprob, WZH = self.time_analyzer.do_estep(Wt, Zt, Ht)
+            logger.info('Iteration t%d: logprob = %f', iter, logprob)
+            Wt, Zt, Ht = self.time_analyzer.do_mstep(iter)
+            assert Wt.ndim == 3
+            assert Zt.ndim == 1
+            assert Ht.ndim == 2
+        self.time_analyzer.plot(Vt, Wt, Zt, Ht, iter)
+
+        meta_logprob, meta_WZH = self.meta_time_analyzer.do_estep(Wt, Zt, Ht)
+        meta_Wt, meta_Zt, meta_Ht = self.meta_time_analyzer.do_mstep(0)
+        return Wt, Zt, Ht, meta_Wt, meta_Zt, meta_Ht
+
+    def run(self, V, niter=10, nsubiter=5, Wf=None, Zf=None, Hf=None, Wt=None, Zt=None, Ht=None):
+        meta_Hf = np.dstack([np.concatenate([self.V]*self.rank, axis=1)] * self.rank).transpose(2,0,1)
+        for iter in xrange(niter):
+            # run_freq returns Hf = (rank, F, rank*T)
+            # sum to get (rank, F, T)
+            # transpose to get (F, rank, T)
+            temp = self.sum_pieces(meta_Hf).transpose(1,0,2)
+            # flatten to get (1, F*rank*T)
+            Vt = temp.flatten()[newaxis,:]
+            
+            Wt, Zt, Ht, meta_Wt, meta_Zt, meta_Ht =\
+              self.run_time(Vt, Wt, Zt, Ht, nsubiter)
+
+            # run_time returns Ht = (rank, F*rank*T)
+            # reshape to get (rank, F, rank*T)
+            temp = Ht.reshape(self.rank, self.fsteps, self.rank*self.tsteps)
+            # sum to get (rank, F, T)
+            # transpose to get (F, rank, T)
+            temp = self.sum_pieces(temp).transpose(1,0,2)
+            # reshape to get (F, rank*T)
+            Vf = np.reshape(temp, (self.fsteps, self.rank*self.tsteps))
+
+            Wf, Zf, Hf, meta_Wf, meta_Zf, meta_Hf =\
+              self.run_freq(Vf, Wf, Zf, Hf, nsubiter)
+        return Wf, Zf, Hf, Wt, Zt, Ht, meta_Wf, meta_Zf, meta_Hf
+    
+    def sum_pieces(self, array):
+        """
+        Given an array made of `r` equal-sized pieces that are concatenated
+        along the array's last axis, return the smaller array that results
+        from summing these pieces. `r` is defined to be `self.rank`.
+        """
+        assert array.shape[-1] % self.rank == 0
+        width = array.shape[-1] // self.rank
+        shape = list(array.shape)
+        shape[-1] = width
+        result = np.zeros(tuple(shape))
+        for i in xrange(self.rank):
+            result += array[..., i*width : (i+1)*width]
+        return result
+
+class OldBasilica(SIPLCA2):
     def __init__(self, V, rank, win, circular=False, alphaWf=0, alphaWt=0,
                  betaWf=0, betaWt=0, **kwargs):
         SIPLCA2.__init__(self, V, rank, win, circular, **kwargs)
@@ -21,7 +131,7 @@ class Basilica(SIPLCA2):
 
     @staticmethod
     def w_product(Wf, Wt):
-        return Wf[:,:,np.newaxis] * Wt[np.newaxis,:,:]
+        return Wf[:,:,newaxis] * Wt[newaxis,:,:]
 
     def initialize(self):
         W, Z, H = SIPLCA2.initialize(self)
@@ -106,10 +216,10 @@ class Basilica(SIPLCA2):
         WZH = self.reconstruct(Wf, Wt, Z, H, circular=self.circular)
         logprob = self.compute_logprob(Wf, Wt, Z, H, WZH)
 
-        WfZ = Wf * Z[np.newaxis,:]
-        WtZ = Wt * Z[:,np.newaxis]
+        WfZ = Wf * Z[newaxis,:]
+        WtZ = Wt * Z[:,newaxis]
 
-        VdivWZH = (self.V / (WZH + EPS))[:,:,np.newaxis]
+        VdivWZH = (self.V / (WZH + EPS))[:,:,newaxis]
         self.VRWf[:] = 0
         self.VRWt[:] = 0
         self.VRH[:] = 0
@@ -120,10 +230,10 @@ class Basilica(SIPLCA2):
                 ## Hshifted : (rank, T)
                 ## tmp : (F, T, rank)
                 ## Previously:
-                # tmp = ((WZshifted[:,:,tau][:,:,np.newaxis]
-                #         * Hshifted[np.newaxis,:,:]).transpose((0,2,1))
+                # tmp = ((WZshifted[:,:,tau][:,:,newaxis]
+                #         * Hshifted[newaxis,:,:]).transpose((0,2,1))
                 #        * VdivWZH)
-                WZtau = WfZshifted * WtZ[:,tau][np.newaxis,:] # (F, rank)
+                WZtau = WfZshifted * WtZ[:,tau][newaxis,:] # (F, rank)
                 tmp = Basilica.w_product(WZtau, Hshifted).transpose((0,2,1)) * VdivWZH
                 self.VRWf += shift(tmp.sum(1), -r, 0, self.circularF)
                 self.VRWt[:,tau] += tmp.sum(1).sum(0)

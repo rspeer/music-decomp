@@ -15,6 +15,9 @@ from pyechonest import config
 config.ECHO_NEST_API_KEY="LFYSHIOM0NNSDBCKJ"
 import time
 
+def deriv_decay(sig, decay=0.9):
+    return sig[:, 1:] - sig[:,:-1]*decay
+
 def triangle(sig):
     """
     Make a triangle wave from a signal (in radians), similarly to signal.square
@@ -117,10 +120,13 @@ class MusicAnalyzer(object):
             mod_chunk = np.abs(chunk)[:, ::self.subsample]
             yield self.timbre_analyzer.analyze(mod_chunk)
 
-    def analyze_pitch(self, audio, maxlen=60):
+    def analyze_pitch(self, audio, maxlen=60, quantized=False):
         pitch_chunks = []
         for pitch in self.stream_analyze_pitch(audio, maxlen):
-            pitch_chunks.append(pitch)
+            chunk = np.abs(pitch)
+            if quantized:
+                chunk = self.quantize_equal(chunk, self.subsample)
+            pitch_chunks.append(chunk)
         return np.concatenate(pitch_chunks, axis=1)
 
     def analyze_timbre(self, audio, maxlen=60):
@@ -207,18 +213,10 @@ class MusicAnalyzer(object):
             pcm += np.repeat(W[pitch], self.subsample) * sine
         pcm /= np.max(pcm)
         return AudioData(pcm, self.samplerate)
-        
+    
     def reconstruct_WZH(self, plca, W, Z, H):
         WZH = plca.reconstruct(W, Z, H, circular=[False, False])
-        pcm = np.zeros((WZH.shape[1]*self.subsample,))
-        angle = np.arange(WZH.shape[1]*self.subsample) * 2 * np.pi / self.samplerate
-        for pitch in xrange(self.npitches):
-            print pitch
-            freq = self.lowfreq * 2.0**(pitch/12.0)
-            sine = np.sin(angle*freq)
-            pcm += np.repeat(WZH[pitch], self.subsample) * sine
-        pcm /= np.max(pcm)
-        return AudioData(pcm, self.samplerate)
+        return self.reconstruct_W(WZH)
 
 class MorletFilterBank(object):
     def __init__(self, lowfreq, npitches, window_size, samplerate,
@@ -323,6 +321,5 @@ if __name__ == '__main__':
     analyzer = MusicAnalyzer(window_size=44100, subsample=1470)
     #plt.plot(analyzer.filter_window)
     #plt.show()
-    pitch = analyzer.quantize_equal(np.abs(analyzer.analyze_pitch(audio, 15)), 1470)
-    pitch2 = second_derivative(pitch)
+    pitch = analyzer.analyze_pitch(audio, 15, quantize=True)
 
