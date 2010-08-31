@@ -1,9 +1,11 @@
 from plca import SIPLCA, SIPLCA2, normalize, logger, plt, shift, EPS, plottools
 import numpy as np
 from numpy import newaxis
+import matplotlib.pyplot as plt
+
 class Basilica(object):
     def __init__(self, V, rank, t_win, alphaWf=0, alphaWt=0, betaWf=0, betaWt=0,
-                 betaH=0):
+                 betaHf=0, betaHt=0):
         # Find out if other H parameters are necessary?
         # TODO: incremental V
         self.V = V / V.sum()
@@ -16,19 +18,19 @@ class Basilica(object):
 
         # Make the time-independent frequency analyzer
         self.freq_analyzer = SIPLCA2(H, rank, (self.f_steps, 1),
-                                     alphaW=alphaWf[newaxis,...],
-                                     betaW=betaWf, betaH=betaH)
+                                     alphaW=alphaWf[...,newaxis],
+                                     betaW=betaWf, betaH=betaHf)
         self.meta_freq_analyzer = SIPLCA2(self.V, rank, (self.f_steps, 1),
-                                          alphaW=alphaWf[newaxis,...],
-                                          betaW=betaWf, betaH=betaH)
+                                          alphaW=alphaWf[...,newaxis],
+                                          betaW=betaWf, betaH=0)
 
         # Make the frequency-independent time-envelope analyzer
         self.time_analyzer = SIPLCA(Hflat, rank, self.t_win,
                                     alphaW=alphaWt[newaxis,...],
-                                    betaW=betaWt, betaH=betaH)
+                                    betaW=betaWt, betaH=betaHt)
         self.meta_time_analyzer = SIPLCA(Vflat, rank, self.t_win,
                                          alphaW=alphaWt[newaxis,...],
-                                         betaW=betaWt, betaH=betaH)
+                                         betaW=betaWt, betaH=0)
 
     def run_freq(self, Vf, Wf=None, Zf=None, Hf=None, niter=5):
         self.freq_analyzer.V = Vf
@@ -42,9 +44,15 @@ class Basilica(object):
             logprob, WZH = self.freq_analyzer.do_estep(Wf, Zf, Hf)
             logger.info('Iteration f%d: logprob = %f', iter, logprob)
             Wf, Zf, Hf = self.freq_analyzer.do_mstep(iter)
-        self.freq_analyzer.plot(Vf, Wf, Zf, Hf, iter)
+        plt.clf()
+        plt.plot(Wf[...,0])
+        plt.draw()
+
+        # Hf : (rank, F, rank*T)
+        # Hf_sum : (rank, F, T)
+        Hf_sum = self.sum_pieces(Hf)
         
-        meta_logprob, meta_WZH = self.meta_freq_analyzer.do_estep(Wf, Zf, Hf)
+        meta_logprob, meta_WZH = self.meta_freq_analyzer.do_estep(Wf, Zf, Hf_sum)
         meta_Wf, meta_Zf, meta_Hf = self.meta_freq_analyzer.do_mstep(0)
         return Wf, Zf, Hf, meta_Wf, meta_Zf, meta_Hf
     
@@ -64,38 +72,52 @@ class Basilica(object):
             assert Wt.ndim == 3
             assert Zt.ndim == 1
             assert Ht.ndim == 2
-        self.time_analyzer.plot(Vt, Wt, Zt, Ht, iter)
+        plt.clf()
 
-        meta_logprob, meta_WZH = self.meta_time_analyzer.do_estep(Wt, Zt, Ht)
+        # Ht : (rank, rank*F*T)
+        # Ht_sum : (rank, F*T)
+        Ht_sum = self.sum_pieces(Ht)
+        Htt = Ht_sum.reshape(self.rank, self.f_steps, self.t_steps)
+        Hmax = np.max(Htt)
+        plt.imshow(np.rollaxis(Htt[0:3]/Hmax*2, 0, 3), origin='lower', aspect='auto', interpolation='nearest')
+        plt.draw()
+
+        meta_logprob, meta_WZH = self.meta_time_analyzer.do_estep(Wt, Zt, Ht_sum)
         meta_Wt, meta_Zt, meta_Ht = self.meta_time_analyzer.do_mstep(0)
         return Wt, Zt, Ht, meta_Wt, meta_Zt, meta_Ht
 
-    def run(self, V, niter=10, nsubiter=5, Wf=None, Zf=None, Hf=None, Wt=None, Zt=None, Ht=None):
-        meta_Hf = np.dstack([np.concatenate([self.V]*self.rank, axis=1)] * self.rank).transpose(2,0,1)
+    def run(self, V, niter=5, nsubiter=10, Wf=None, Zf=None, Hf=None, Wt=None, Zt=None, Ht=None, play_func=None):
+        meta_Hf = np.dstack([self.V] * self.rank).transpose(2,0,1)
         for iter in xrange(niter):
-            # run_freq returns Hf = (rank, F, rank*T)
-            # sum to get (rank, F, T)
-            # transpose to get (F, rank, T)
-            temp = self.sum_pieces(meta_Hf).transpose(1,0,2)
-            # flatten to get (1, F*rank*T)
-            Vt = temp.flatten()[newaxis,:]
+            # run_freq returns Hf : (rank, F, T)
+            # flatten to get (1, rank*F*T)
+            Vt = meta_Hf.flatten()[newaxis,:]
             
             Wt, Zt, Ht, meta_Wt, meta_Zt, meta_Ht =\
               self.run_time(Vt, Wt, Zt, Ht, nsubiter)
 
-            # run_time returns Ht = (rank, F*rank*T)
-            # reshape to get (rank, F, rank*T)
-            temp = Ht.reshape(self.rank, self.fsteps, self.rank*self.tsteps)
-            # sum to get (rank, F, T)
+            # run_time returns Ht : (rank, F*T)
+            # reshape to get (rank, F, T)
+            temp = meta_Ht.reshape(self.rank, self.f_steps, self.t_steps)
             # transpose to get (F, rank, T)
-            temp = self.sum_pieces(temp).transpose(1,0,2)
+            temp = temp.transpose(1,0,2)
             # reshape to get (F, rank*T)
-            Vf = np.reshape(temp, (self.fsteps, self.rank*self.tsteps))
+            Vf = np.reshape(temp, (self.f_steps, self.rank*self.t_steps))
 
             Wf, Zf, Hf, meta_Wf, meta_Zf, meta_Hf =\
               self.run_freq(Vf, Wf, Zf, Hf, nsubiter)
-        return Wf, Zf, Hf, Wt, Zt, Ht, meta_Wf, meta_Zf, meta_Hf
+            rec = self.reconstruct(Wf, Zf, Wt, Zt, Ht**2)
+            if play_func: play_func(rec)
+        return Wf, Zf, Hf, Wt, Zt, Ht, meta_Wf, meta_Zf, meta_Hf, rec
     
+    def reconstruct(self, Wf, Zf, Wt, Zt, Ht):
+        # V = convolve(Wf * Zf, meta_Hf)
+        # meta_Hf = Vt = convolve(Wt * Zt, Ht)
+        # V = convolve(Wf * Zf, Wt * Zt, Ht)
+        Hf = self.time_analyzer.reconstruct(Wt, Zt, Ht).reshape(self.rank, self.f_steps, self.t_steps)
+        rec = self.freq_analyzer.reconstruct(Wf, Zf, Hf)
+        return rec
+
     def sum_pieces(self, array):
         """
         Given an array made of `r` equal-sized pieces that are concatenated

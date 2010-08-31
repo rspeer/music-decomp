@@ -3,10 +3,10 @@ import numpy as np
 def harmonic_prior(npitches, nperc, nharmonic, nfree):
     N = nharmonic + nperc + nfree
     prior = np.zeros((npitches, N))
-    prior[:, :nperc] = 0.0001
-    prior[:, nperc:] = -0.001
+    prior[:, :nperc] = 0.001
+    prior[:, nperc:] = -0.01
     for harmonic, steps in HARMONIC_VALUES:
-        prior[steps, nperc:] = 0.0001/harmonic
+        prior[steps, nperc:] = 0.01/harmonic
     for harmonic, steps in HARMONIC_VALUES[1:]:
         prior[steps, nperc+nharmonic:] = 0
     return prior
