@@ -44,17 +44,19 @@ class Basilica(object):
             logprob, WZH = self.freq_analyzer.do_estep(Wf, Zf, Hf)
             logger.info('Iteration f%d: logprob = %f', iter, logprob)
             Wf, Zf, Hf = self.freq_analyzer.do_mstep(iter)
-        plt.clf()
-        plt.plot(Wf[...,0])
-        plt.draw()
+            plt.clf()
+            plt.plot(Wf[...,0])
+            plt.draw()
 
         # Hf : (rank, F, rank*T)
         # Hf_sum : (rank, F, T)
-        Hf_sum = self.sum_pieces(Hf)
+        meta_Hf = self.sum_pieces(Hf)
         
-        meta_logprob, meta_WZH = self.meta_freq_analyzer.do_estep(Wf, Zf, Hf_sum)
+        meta_logprob, meta_WZH = self.meta_freq_analyzer.do_estep(
+          Wf, Zf, meta_Hf)
+        logger.info('Meta f%d: logprob = %f', iter, logprob)
         meta_Wf, meta_Zf, meta_Hf = self.meta_freq_analyzer.do_mstep(0)
-        return Wf, Zf, Hf, meta_Wf, meta_Zf, meta_Hf
+        return Wf, Zf, Hf, meta_Hf
     
     # now do the same for run_time
     def run_time(self, Vt, Wt=None, Zt=None, Ht=None, niter=5):
@@ -72,19 +74,21 @@ class Basilica(object):
             assert Wt.ndim == 3
             assert Zt.ndim == 1
             assert Ht.ndim == 2
-        plt.clf()
 
         # Ht : (rank, rank*F*T)
         # Ht_sum : (rank, F*T)
-        Ht_sum = self.sum_pieces(Ht)
-        Htt = Ht_sum.reshape(self.rank, self.f_steps, self.t_steps)
+        meta_Ht = self.sum_pieces(Ht)
+
+        Htt = meta_Ht.reshape(self.rank, self.f_steps, self.t_steps)
         Hmax = np.max(Htt)
+        plt.clf()
         plt.imshow(np.rollaxis(Htt[0:3]/Hmax*2, 0, 3), origin='lower', aspect='auto', interpolation='nearest')
         plt.draw()
-
-        meta_logprob, meta_WZH = self.meta_time_analyzer.do_estep(Wt, Zt, Ht_sum)
+        
+        meta_logprob, meta_WZH = self.meta_time_analyzer.do_estep(Wt, Zt, meta_Ht)
+        logger.info('Meta t%d: logprob = %f', iter, logprob)
         meta_Wt, meta_Zt, meta_Ht = self.meta_time_analyzer.do_mstep(0)
-        return Wt, Zt, Ht, meta_Wt, meta_Zt, meta_Ht
+        return Wt, Zt, Ht, meta_Ht
 
     def run(self, V, niter=5, nsubiter=10, Wf=None, Zf=None, Hf=None, Wt=None, Zt=None, Ht=None, play_func=None):
         meta_Hf = np.dstack([self.V] * self.rank).transpose(2,0,1)
@@ -93,7 +97,7 @@ class Basilica(object):
             # flatten to get (1, rank*F*T)
             Vt = meta_Hf.flatten()[newaxis,:]
             
-            Wt, Zt, Ht, meta_Wt, meta_Zt, meta_Ht =\
+            Wt, Zt, Ht, meta_Ht =\
               self.run_time(Vt, Wt, Zt, Ht, nsubiter)
 
             # run_time returns Ht : (rank, F*T)
@@ -104,11 +108,11 @@ class Basilica(object):
             # reshape to get (F, rank*T)
             Vf = np.reshape(temp, (self.f_steps, self.rank*self.t_steps))
 
-            Wf, Zf, Hf, meta_Wf, meta_Zf, meta_Hf =\
+            Wf, Zf, Hf, meta_Hf =\
               self.run_freq(Vf, Wf, Zf, Hf, nsubiter)
             rec = self.reconstruct(Wf, Zf, Wt, Zt, Ht**2)
             if play_func: play_func(rec)
-        return Wf, Zf, Hf, Wt, Zt, Ht, meta_Wf, meta_Zf, meta_Hf, rec
+        return Wf, Zf, Hf, Wt, Zt, Ht, meta_Hf, meta_Ht, rec
     
     def reconstruct(self, Wf, Zf, Wt, Zt, Ht):
         # V = convolve(Wf * Zf, meta_Hf)

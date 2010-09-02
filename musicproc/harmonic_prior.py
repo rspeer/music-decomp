@@ -7,6 +7,7 @@ def harmonic_prior(npitches, nperc, nharmonic, nfree):
     prior[:, nperc:] = -0.01
     for harmonic, steps in HARMONIC_VALUES:
         prior[steps, nperc:] = 0.01/harmonic
+    prior[0, nperc:] = 0.05
     for harmonic, steps in HARMONIC_VALUES[1:]:
         prior[steps, nperc+nharmonic:] = 0
     return prior
