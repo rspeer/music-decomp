@@ -17,7 +17,6 @@ class CCIPCAProcessor(dataprocessor.DataProcessor):
     def process_sequence(self, frames):
         for frame in frames:
             mags = self.ccipca.learn_vector(frame)
-            mags[0] = 0
             rec = self.ccipca.reconstruct(mags)
             rec /= (np.linalg.norm(rec) / np.linalg.norm(frame))
             
@@ -27,9 +26,12 @@ class CCIPCAProcessor(dataprocessor.DataProcessor):
                 pylab.show()
             yield rec
 
+def unhanning(sig):
+    return 1.0-np.hanning(sig)
+
 pipe = ronwtools.Pipeline(
-    make_pipe('../high-hopes.ogg'),
-    CCIPCAProcessor((8193, 100), plot=False),
+    make_pipe('../clocks.ogg'),
+    CCIPCAProcessor((8193, 200), plot=False),
     ronwtools.ISTFT(nfft=16384, nhop=8192, winfun=np.ones),
     ronwtools.Framer(262144)
 )
