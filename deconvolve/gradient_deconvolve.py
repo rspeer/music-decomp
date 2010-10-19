@@ -12,13 +12,13 @@ def sparsify(mat, s):
 
 def normalize(A, axis=None):
     if axis is None:
-        return A / np.linalg.norm(A)
+        return A / np.sum(np.abs(A))
     if isinstance(axis, int):
         axis = (axis,)
         
-    norm = A.copy()
+    norm = np.abs(A)
     for ax in reversed(sorted(axis)):
-        norm = np.sqrt((norm ** 2).sum(ax))
+        norm = norm.sum(ax)
     nshape = np.array(A.shape)
     nshape[axis] = 1
     norm.shape = nshape
@@ -44,6 +44,16 @@ def magical_entropy_hammer(param, evidence, beta, nu=50, niter=30, convergence_t
         if np.mean(np.abs(param - lastparam)) < convergence_thresh:
             break
     return param
+
+def fft_convolve(v1, v2):
+    s1 = v1.shape[-1]
+    s2 = v2.shape[-1]
+    valid = abs(s2-s1) + 1
+    fsize = 2**np.ceil(np.log2(s1+s2-1))
+
+    convolver = (EPS + signal.fft(v2, fsize, axis=-1))
+    convolved = np.real(signal.ifft(convolver * signal.fft(v1, fsize, axis=-1), axis=-1))
+    return _centered(convolved, valid)
 
 def fft_deconvolve(num, denom):
     s1 = num.shape[-1]
@@ -72,8 +82,7 @@ def degrades(V, W, H, rate, s, niter=20):
         convolved = np.sum(convolved_pieces, axis=0)
         delta = V - convolved
         projected_W = fft_deconvolve(delta, H)
-        W += projected_W * rate
-        W = normalize(W, axis=1)
+        W = magical_entropy_hammer(W, W + projected_W * rate, 0.001, axis=1)
         
         print np.sum(np.abs(delta))
         print H
@@ -104,7 +113,7 @@ if __name__ == '__main__':
         np.linspace(0.0, 0.0, 10, endpoint=False),
     ], axis=1)
 
-    initH = np.random.normal(size=(2, 100))
-    initW = np.random.normal(size=(2, 21))
+    initH = np.random.normal(size=(1, 100))
+    initW = np.random.normal(size=(1, 21))
     W, H = degrades(func, initW, initH, 0.1, 5, 500)
 
