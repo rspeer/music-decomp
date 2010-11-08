@@ -1,10 +1,10 @@
 import numpy as np
 import ronwtools
 
-stft = ronwtools.STFT(nfft=16384, nhop=8192)
 ticks = np.log(np.arange(1, 8194))
 
-def make_pipe(filename='../high-hopes.ogg', winfun=np.ones):
+def make_pipe(filename='../high-hopes.ogg', nfft=16384, nhop=16384, winfun=np.hanning):
+    stft = ronwtools.STFT(nfft=nfft, nhop=nhop, winfun=winfun)
     pipe = ronwtools.Pipeline(
         ronwtools.AudioSource(filename),
         ronwtools.Mono(),
