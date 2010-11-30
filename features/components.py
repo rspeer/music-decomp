@@ -24,17 +24,19 @@ class CCIPCAProcessor(dataprocessor.DataProcessor):
             rec /= (np.linalg.norm(rec) / np.linalg.norm(frame))
             
             if self.plot:
-                pylab.plot(ticks, np.log(np.abs(rec)), ticks, np.log(np.abs(frame)))
-                pylab.ylim(-10, 10)
+                #pylab.plot(ticks, np.log(np.abs(rec)), ticks, np.log(np.abs(frame)))
+                pylab.bar(xrange(10), np.abs(mags[:10]))
+                pylab.ylim(0, 1000)
                 pylab.show()
             yield rec
 
 def learnit():
+    ccipca = CCIPCAProcessor((8193, 400), plot=False, amnesia=1.0)
     pipe = ronwtools.Pipeline(
         ronwtools.AudioSource('../chess.ogg'),
         ronwtools.Mono(),
         ronwtools.STFT(nfft=16384, nhop=4096, winfun=np.hanning),
-        CCIPCAProcessor((8193, 200), plot=False),
+        ccipca,
         ronwtools.ISTFT(nfft=16384, nhop=4096, winfun=np.hanning),
         ronwtools.Framer(524288)
     )
@@ -42,6 +44,7 @@ def learnit():
         segment /= np.max(segment)
         print np.max(segment)
         audiolab.play(segment)
+    divisi2.save(ccipca.ccipca.matrix, 'chess2.eigs')
 
 def generate():
     ccipca = CCIPCAProcessor((8193, 200), plot=False)
@@ -59,4 +62,23 @@ def generate():
         segment /= np.max(segment)
         audiolab.play(segment)
 
-generate()
+def correlate():
+    ccipca = CCIPCAProcessor((8193, 200), plot=False, amnesia=1.0)
+    ccipca.ccipca = CCIPCA(divisi2.load('chess.eigs'))
+    ccipca.ccipca.iteration = 100000
+    ccipca.output_ccipca = ccipca.ccipca
+    pipe = ronwtools.Pipeline(
+        ronwtools.AudioSource('../chess.ogg'),
+        ronwtools.Mono(),
+        ronwtools.STFT(nfft=16384, nhop=4096, winfun=np.hanning),
+        ccipca,
+        ronwtools.ISTFT(nfft=16384, nhop=4096, winfun=np.hanning),
+        ronwtools.Framer(1048576)
+    )
+    for segment in pipe:
+        print np.max(segment)
+        segment /= np.max(segment)
+        audiolab.play(segment)
+
+
+correlate()
